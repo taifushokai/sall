@@ -15,12 +15,12 @@ def main
   end
   user_content = cgi["user_content"]
   if submit == "OK" && user_content != ""
-    talk(dbh, user_name, user_content)
+    (asst_content, user_name) = talk(dbh, user_name, user_content)
   elsif submit == "CLEAR"
     # どちらにしろ user_content は空になる
   end
   hist = ""
-  get_hist(dbh, user_name).each do |dir, content|
+  get_hist(dbh, user_name, 20).each do |dir, content|
     if dir == "user"
       hist << sprintf("%s: %s\n", user_name, content.to_s.strip)
     else
@@ -36,7 +36,7 @@ def output(hist, user_name)
 
   histbuf = hist.split("\n")
   eoa = histbuf.size - 1
-  boa = eoa - 20 + 1 # なるべくtextarea に全体を表示させる
+  boa = eoa - 16 + 1 # なるべくtextarea に全体を表示させる
   boa = 0 if boa < 0
   hist = histbuf[boa .. eoa].join("\n")
 
@@ -60,6 +60,16 @@ Content-type: text/html
         transition: 0.8s;
         border-radius: 0;
       }
+      input[type="text"] {
+        background: #ffe8c8;
+        font-size: medium;
+        margin-left: auto;
+        margin-right: auto;
+        vertical-align: auto;
+        width: 120px;
+        transition: 0.8s;
+        border-radius: 0;
+      }
       input[type="submit"] {
         background: #ffe8c8;
         font-size: medium;
@@ -72,16 +82,22 @@ Content-type: text/html
       }
     </style>
   </head>
-  <body style="text-align: center;">
+  <body style="text-align: left;">
     <form method="POST">
+      話の流れ
+      <br />
       <textarea name="hist" rows="24" readonly>#{hist}</textarea>
       あなたの名前 <input type="text"  name="user_name" value="#{user_name}">
       <br />
+      あなたの話
+      <br />
       <textarea name="user_content" rows="8"></textarea>
+      <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="CLEAR" />
+      </dev>
     </form>
     <br />
   </body>
