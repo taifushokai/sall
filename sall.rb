@@ -7,9 +7,12 @@ require "ollama-ai"
 require "sqlite3"
 require "pp"
 
+TALK_LENGTH = 10 # 会話が続く時間[MINUTES]
+
 def main
   dbh = get_dbh()
 =begin
+  # 初期知識の例
   insert(dbh, "INIT", "asst", "光子は電磁相互作用を媒介するゲージ粒子で、ガンマ線の正体であり γ で表されることが多い。")
   insert(dbh, "INIT", "asst", "ウィークボソンは弱い相互作用を媒介するゲージ粒子で、質量を持つ。")
   insert(dbh, "INIT", "asst", "Wボソンは電荷±1をもつウィークボソンで、ベータ崩壊を起こすゲージ粒子である。W+, W−で表され、互いに反粒子の関係にある。")
@@ -18,13 +21,21 @@ def main
   insert(dbh, "INIT", "asst", "XボソンとYボソンはジョージ＝グラショウ模型において導入される未発見のゲージ粒子である。")
   insert(dbh, "INIT", "asst", "重力子（グラビトン）は重力を媒介する未発見のゲージ粒子で、スピン2のテンソル粒子と考えられている。")
 =end
+  user_name = "Visiter"
   user_content = nil
   begin
-    user_name = "Visiter"
     print ">>> "
     user_content = gets
     if user_content
-      puts talk(dbh, user_name, user_content)
+      if /\s*user\s+(\S+)/ =~ user_content
+        user_name = $1
+      elsif user_content.strip == "hist"
+        get_hist(dbh, user_name, 3).each do |dir, content|
+          printf("%s: %s\n", dir, content.to_s.strip)
+        end
+      else
+        puts talk(dbh, user_name, user_content)
+      end
     end
     end while user_content
   puts
@@ -43,7 +54,7 @@ def talk(dbh, user_name, user_content)
     messages << { role: "assistant", content: row[0] }
   end
   # ユーザとの会話を読み込む(1日以内)
-  sql = "SELECT dir, content FROM salltext WHERE talker = ? AND utime >= DATETIME('NOW', '-1 DAYS') ORDER BY id"
+  sql = "SELECT dir, content FROM salltext WHERE talker = ? AND utime >= DATETIME('NOW', '-#{TALK_LENGTH} MINUTES') ORDER BY id"
   dbh.execute(sql, [user_name]) do |row|
     (dir, content) = *row
     case dir
@@ -97,17 +108,27 @@ def insert(dbh, talker, dir, content)
   dbh.execute(sql, [talker, dir, content])  
 end
 
-def get_hist(dbh, user_name)
-  sql = "SELECT dir, content FROM salltext WHERE talker = ? AND utime >= DATETIME('NOW', '-1 DAYS') ORDER BY id"
+def get_hist(dbh, user_name, max = nil)
+  histarr = []
+  sql = "SELECT dir, content FROM salltext WHERE talker = ? AND utime >= DATETIME('NOW', '-#{TALK_LENGTH} MINUTES') ORDER BY id"
   dbh.execute(sql, [user_name]) do |row|
     (dir, content) = *row
     case dir
     when "user"
-      messages << { role: "user",      content: content }
+      histarr << ["user", content]
     when "asst"
-      messages << { role: "assistant", content: content }
+      histarr << ["assistant", content]
     end
   end
+  if max
+    max = max.to_i
+    eoa = histarr.size - 1
+    boa = eoa - max + 1
+    boa = 0 if boa < 0
+    histarr = histarr[boa, eoa]
+  end
+  return histarr
 end
 
 main if __FILE__ == $0
+
