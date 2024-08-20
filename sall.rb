@@ -50,7 +50,7 @@ def talk(dbh, user_name, user_content)
   # 初期知識を読み込む
   sql = "SELECT content FROM salltext WHERE talker LIKE '_INIT_%' AND dir = 'asst' ORDER BY id"
   dbh.execute(sql) do |row|
-    messages << { role: "assistant", content: row[0] }
+    messages << { role: "system", content: row[0] }
   end
   # ユーザとの会話を読み込む(1日以内)
   sql = "SELECT dir, content FROM salltext WHERE talker = ? AND utime >= DATETIME('NOW', '-#{TALK_LENGTH} MINUTES') ORDER BY id"
