@@ -9,7 +9,7 @@ RETENTION_DAYS = 2 # 会話保管期間[DAYS]
 def main
   dbh = get_dbh()
   begin
-    sql = "DELETE FROM salltext WHERE talker NOT LIKE '_INIT_%' AND utime <= DATETIME('NOW', '-#{RETENTION_DAYS}')"
+    sql = "DELETE FROM salltext WHERE dir <> 'system' AND wtime <= DATETIME('NOW', '-#{RETENTION_DAYS}')"
     dbh.execute(sql)
     sql = "VACUUM"
     dbh.execute(sql)
