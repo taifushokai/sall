@@ -4,14 +4,14 @@
 
 require "rubygems"
 require "ollama-ai"
-require "mecab"
+require "natto"
 require "pp"
 
 LLMODEL = "gemma:2b"
 PER0_DEF = "System"
 PER1_DEF = "Visitor"
 $llm_client = nil
-$tagger = nil
+$parser = nil
 $hist = []
 
 #=== main
@@ -104,12 +104,12 @@ end
 
 def analyze(words)
   content = ""
-  unless $tagger
-    $tagger = MeCab::Tagger.new
+  unless $parser
+    $parser = Natto::MeCab.new
   end
-  mecabtext = $tagger.parse(words)
-  pp mecabtext
-  puts mecabtext
+  parsedtext = $parser.parse(words)
+  pp parsedtext
+  puts parsedtext
   return content
 end
 
