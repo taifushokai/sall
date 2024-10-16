@@ -5,11 +5,17 @@
 require "rubygems"
 require "ollama-ai"
 require "natto"
+require "duckduckgo"
 require "pp"
 
 LLMODEL = "gemma:2b"
+ROLL_SYSTEM = "system"
+ROLL_ASSISTANT = "assistant"
+ROLL_USEER = "user"
+
 PER0_DEF = "System"
 PER1_DEF = "Visitor"
+
 $llm_client = nil
 $parser = nil
 $hist = []
@@ -52,22 +58,27 @@ def talk(per0, per1, per1_words)
                                   options: { server_sent_events: true })
   end
   system_content = ""
+  system_content += analyze(per1_words, [per0, per1])
   open("sall_init.txt") do |rh|
-    system_content = rh.read + "\n"
+    system_content += rh.read + "\n"
   end
   if per0 != PER0_DEF
-    system_content += "assistant は #{per0} の役です。\n"
+    system_content += "#{ROLL_ASSISTANT} は #{per0} の役です。\n"
   end
   if per1 != PER1_DEF
-    system_content += "user の名前は #{per1} です。\n"
+    system_content += "#{ROLL_USEER} の名前は #{per1} です。\n"
   end
-  system_content += analyze(per1_words)
-  messages = [{"role": "system", "content": system_content}]
+  messages = []
+  system_content.each_line do |line|
+    messages << {"role": ROLL_SYSTEM, "content": line}
+  end
   $hist.each do |per1_hist, per0_hist|
-    messages << {"role": "user", "content": per1_hist}
-    messages << {"role": "assistant" , "content": per0_hist}
+    messages << {"role": ROLL_USEER, "content": per1_hist}
+    messages << {"role": ROLL_ASSISTANT , "content": per0_hist}
   end
-  messages << {"role": "user", "content": per1_words}
+  messages << {"role": ROLL_ASSISTANT, "content": "質問に答えます。"}
+  messages << {"role": ROLL_USEER, "content": per1_words}
+  #puts messages
   chatdata = {
     model: LLMODEL,
     messages: messages
@@ -95,21 +106,33 @@ def get_content(response)
   content = ""
   response.each do |hash|
     message = hash["message"]
-    if message and message["role"] == "assistant"
+    if message and message["role"] == ROLL_ASSISTANT
       content += message["content"].to_s
     end
   end
+  content.gsub!("</start_of_turn>", "")
+  content.gsub!("</end_of_turn>", "")
+  content.strip!
   return content
 end
 
-def analyze(words)
+def analyze(words, exclusions = [])
   content = ""
   unless $parser
     $parser = Natto::MeCab.new
   end
   parsedtext = $parser.parse(words)
-  pp parsedtext
-  puts parsedtext
+  parsedtext.each_line do |line|
+    if /^(.+?)\t名詞,普通名詞/ =~ line
+      noun = $1
+      unless exclusions.include?(noun)
+        results = DuckDuckGo::search(:query => noun)
+        results[0 .. 3].each do |result|
+          content += sprintf("%s : %s\n", result.title, result.description)
+        end
+      end
+    end
+  end
   return content
 end
 
