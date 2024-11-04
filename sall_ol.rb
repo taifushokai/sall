@@ -4,8 +4,10 @@
 
 require "rubygems"
 require "ollama-ai"
+require "nkf"
 require "natto"
 require "duckduckgo"
+require "wikipedia"
 require "pp"
 
 LLMODEL = "gemma:2b"
@@ -58,7 +60,15 @@ def talk(per0, per1, per1_words)
                                   options: { server_sent_events: true })
   end
   system_content = ""
-  system_content += analyze(per1_words, [per0, per1])
+  suppl_content = suppl_wkp(per1_words, [per0, per1])
+  if suppl_content
+    system_content += suppl_content
+  else
+    suppl_content = suppl_ddg(per1_words, [per0, per1])
+    if suppl_content
+      system_content += suppl_content
+    end
+  end
   open("sall_init.txt") do |rh|
     system_content += rh.read + "\n"
   end
@@ -116,19 +126,28 @@ def get_content(response)
   return content
 end
 
-def analyze(words, exclusions = [])
+def suppl_wkp(words, exclusions = [])
   content = ""
+  unless $wkpclient
+    $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
+  end
   unless $parser
     $parser = Natto::MeCab.new
   end
-  parsedtext = $parser.parse(words)
+  parsedtext = $parser.parse(NKF::nkf("-e", words))
   parsedtext.each_line do |line|
-    if /^(.+?)\t名詞,普通名詞/ =~ line.scrub
+    line = NKF::nkf("-w", line).scrub
+    if /^(.+?)\t名詞,(一般|固有名詞|普通名詞)/ =~ line
       noun = $1
       unless exclusions.include?(noun)
-        results = DuckDuckGo::search(:query => noun)
-        results[0 .. 3].each do |result|
-          content += sprintf("%s : %s\n", result.title, result.description)
+        result = $wkpclient.find(noun)
+        if result.summary
+          content = sprintf("%s : %s\n", result.title, result.summary)
+        else
+          results = DuckDuckGo::search(:query => noun)
+          if results[0]
+            content = sprintf("%s : %s\n", results[0].title, results[0].description)
+          end
         end
       end
     end
