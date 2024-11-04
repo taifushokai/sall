@@ -123,7 +123,7 @@ def analyze(words, exclusions = [])
   end
   parsedtext = $parser.parse(words)
   parsedtext.each_line do |line|
-    if /^(.+?)\t名詞,普通名詞/ =~ line
+    if /^(.+?)\t名詞,普通名詞/ =~ line.scrub
       noun = $1
       unless exclusions.include?(noun)
         results = DuckDuckGo::search(:query => noun)
