@@ -18,6 +18,8 @@ ROLL_USEER = "user"
 PER0_DEF = "System"
 PER1_DEF = "Visitor"
 
+NATTO_LANG = "UTF-8" # EUC-JP
+
 $llm_client = nil
 $parser = nil
 $hist = []
@@ -63,11 +65,6 @@ def talk(per0, per1, per1_words)
   suppl_content = suppl_wkp(per1_words, [per0, per1])
   if suppl_content
     system_content += suppl_content
-  else
-    suppl_content = suppl_ddg(per1_words, [per0, per1])
-    if suppl_content
-      system_content += suppl_content
-    end
   end
   open("sall_init.txt") do |rh|
     system_content += rh.read + "\n"
@@ -134,10 +131,11 @@ def suppl_wkp(words, exclusions = [])
   unless $parser
     $parser = Natto::MeCab.new
   end
-  parsedtext = $parser.parse(NKF::nkf("-e", words))
+  words = NKF::nkf("-e", words) if NATTO_LANG != "UTF-8"
+  parsedtext = $parser.parse(words)
   parsedtext.each_line do |line|
-    line = NKF::nkf("-w", line).scrub
-    if /^(.+?)\t名詞,(一般|固有名詞|普通名詞)/ =~ line
+    line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
+    if /^(.+?)\t名詞,(一般|固有名詞|普通名詞|人名|組織名)/ =~ line
       noun = $1
       unless exclusions.include?(noun)
         result = $wkpclient.find(noun)
