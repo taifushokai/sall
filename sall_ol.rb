@@ -10,7 +10,9 @@ require "duckduckgo"
 require "wikipedia"
 require "pp"
 
-LLMODEL = "gemma:2b"
+#LLMODEL = "gemma:2b"
+#LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+LLMODEL = "qwen2.5:1.5b"
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
 ROLL_USEER = "user"
@@ -28,6 +30,7 @@ $hist = []
 def main()
   per0 = PER0_DEF
   per1 = PER1_DEF
+  pasttalk = ""
   loop do
     if per1 == "Visitor"
       printf("あなた > ")
@@ -49,22 +52,23 @@ def main()
     elsif /i'm\s+(\S+)/i =~ wordscmd
       per1 = $1
     else
-      per0_words = talk(per0, per1, per1_words)
+      per0_words = talk(per0, per1, per1_words, pasttalk)
       printf("%s : %s\n", per0, per0_words)
+      pasttalk = sprintf("%s の発言: %s\n%s の発言: %s\n", per1, per1_words, per0, per0_words)
     end
   end
 end
 
 #=== 回答を求める
-def talk(per0, per1, per1_words)
+def talk(per0, per1, per1_words, pasttalk)
   if $llm_client == nil
     $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
                                   options: { server_sent_events: true })
   end
   system_content = ""
-  suppl_content = suppl_wkp(per1_words, [per0, per1])
-  if suppl_content
-    system_content += suppl_content
+  inquiry_results = inquiry(per1_words, [per0, per1])
+  if inquiry_results
+    system_content += inquiry_results
   end
   open("sall_init.txt") do |rh|
     system_content += rh.read + "\n"
@@ -75,6 +79,7 @@ def talk(per0, per1, per1_words)
   if per1 != PER1_DEF
     system_content += "#{ROLL_USEER} の名前は #{per1} です。\n"
   end
+  system_content += pasttalk.to_s
   messages = []
   system_content.each_line do |line|
     messages << {"role": ROLL_SYSTEM, "content": line}
@@ -123,8 +128,8 @@ def get_content(response)
   return content
 end
 
-def suppl_wkp(words, exclusions = [])
-  content = ""
+def inquiry(words, exclusions = [])
+  inquiry_results = ""
   unless $wkpclient
     $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
   end
@@ -132,25 +137,43 @@ def suppl_wkp(words, exclusions = [])
     $parser = Natto::MeCab.new
   end
   words = NKF::nkf("-e", words) if NATTO_LANG != "UTF-8"
+  nounarr = []
+  noun = ""
+  nouncont = false
   parsedtext = $parser.parse(words)
   parsedtext.each_line do |line|
     line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
-    if /^(.+?)\t名詞,(一般|固有名詞|普通名詞|人名|組織名)/ =~ line
-      noun = $1
-      unless exclusions.include?(noun)
+    if /^(.+?)\t名詞,(.+?),/ =~ line
+      noun << $1
+      kind = $2
+      nouncont = true
+    else
+      nounarr << noun
+      noun = ""
+      nouncont = false
+    end
+  end
+  if nouncont
+    nounarr << noun
+  end
+  nounarr.each do |noun|
+    unless exclusions.include?(noun)
+      result = nil
+      begin
         result = $wkpclient.find(noun)
-        if result.summary
-          content = sprintf("%s : %s\n", result.title, result.summary)
-        else
-          results = DuckDuckGo::search(:query => noun)
-          if results[0]
-            content = sprintf("%s : %s\n", results[0].title, results[0].description)
-          end
+      rescue
+      end
+      if result and result.summary
+        inquiry_results << sprintf("%s : %s (Wikipedia)\n", result.title, result.summary)
+      else
+        results = DuckDuckGo::search(:query => noun)
+        if results[0]
+          inquiry_results << sprintf("%s : %s (DuckDuckGo)\n", results[0].title, results[0].description)
         end
       end
     end
   end
-  return content
+  return inquiry_results
 end
 
 #= 直接呼ばれた場合は会話(CLI)を始める
