@@ -10,9 +10,12 @@ require "duckduckgo"
 require "wikipedia"
 require "pp"
 
+NATTO_LANG = "UTF-8" # EUC-JP
+
 #LLMODEL = "gemma:2b"
-#LLMODEL = "qwen2.5:1.5b"
-LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+LLMODEL = "qwen2.5:1.5b"
+#LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
 ROLL_USEER = "user"
@@ -20,11 +23,9 @@ ROLL_USEER = "user"
 PER0_DEF = "System"
 PER1_DEF = "Visitor"
 
-NATTO_LANG = "UTF-8" # EUC-JP
 
 $llm_client = nil
 $parser = nil
-$hist = []
 
 #=== main
 def main()
@@ -33,9 +34,9 @@ def main()
   pasttalk = ""
   loop do
     if per1 == "Visitor"
-      printf("あなた > ")
+      printf("%s あなた > ", Time::now.strftime("%T"))
     else
-      printf("%s > ", per1) 
+      printf("%s %s > ", Time::now.strftime("%T"), per1) 
     end
     getbuf = gets()
     if getbuf == nil
@@ -52,9 +53,13 @@ def main()
     elsif /i'm\s+(\S+)/i =~ wordscmd
       per1 = $1
     else
+      time0 = Time::now
       per0_words = talk(per0, per1, per1_words, pasttalk)
-      printf("%s : %s\n", per0, per0_words)
-      pasttalk = sprintf("%s の発言: %s\n%s の発言: %s\n", per1, per1_words, per0, per0_words)
+      time = Time::now - time0
+      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, per0, per0_words)
+      pasttalk = sprintf("ユーザの「%s」としての発言: %s\n" \
+        +             "assistantの「%s」としての発言: %s\n", \
+        per1, per1_words, per0, per0_words)
     end
   end
 end
@@ -66,29 +71,29 @@ def talk(per0, per1, per1_words, pasttalk)
                                   options: { server_sent_events: true })
   end
   system_content = ""
+  # 語句の問い合わせ
   inquiry_results = inquiry(per1_words, [per0, per1])
   if inquiry_results
     system_content += inquiry_results
   end
-  open("sall_init.txt") do |rh|
-    system_content += rh.read + "\n"
-  end
+  # 名前のの設定
   if per0 != PER0_DEF
     system_content += "#{ROLL_ASSISTANT} は #{per0} の役です。\n"
   end
   if per1 != PER1_DEF
     system_content += "#{ROLL_USEER} の名前は #{per1} です。\n"
   end
+  # プロフィールの読み込み
+  open("sall_init.txt") do |rh|
+    system_content += rh.read + "\n"
+  end
+  # 過去の会話の追加
   system_content += pasttalk.to_s
   messages = []
   system_content.each_line do |line|
     messages << {"role": ROLL_SYSTEM, "content": line}
   end
-  $hist.each do |per1_hist, per0_hist|
-    messages << {"role": ROLL_USEER, "content": per1_hist}
-    messages << {"role": ROLL_ASSISTANT , "content": per0_hist}
-  end
-  messages << {"role": ROLL_ASSISTANT, "content": "質問に答えます。"}
+  messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
   messages << {"role": ROLL_USEER, "content": per1_words}
   #puts messages
   chatdata = {
@@ -102,15 +107,6 @@ def talk(per0, per1, per1_words, pasttalk)
   elsif /『(.+?)』/ =~ per0_words
     per0_words = $1
   end
-  per0_hist = per0_words
-  if per0 != PER0_DEF
-    per0_hist = "(#{per0} として)" + per0_words
-  end
-  per1_hist = per1_words
-  if per1 != PER1_DEF
-    per1_hist = "(#{per1} として)" + per1_words
-  end
-  $hist << [per1_hist, per0_hist]
   return per0_words
 end
 
