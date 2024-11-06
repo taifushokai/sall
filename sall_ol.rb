@@ -10,6 +10,7 @@ require "duckduckgo"
 require "wikipedia"
 require "pp"
 
+DBG = true
 NATTO_LANG = "UTF-8" # EUC-JP
 
 #LLMODEL = "gemma:2b"
@@ -57,10 +58,11 @@ def main()
       time0 = Time::now
       per0_words = talk(per0, per1, per1_words, pasttalk)
       time = Time::now - time0
+      nowstr = Time::now.strftime("%F %T")
       printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, per0, per0_words)
-      pasttalk = sprintf("ユーザの「%s」としての発言: %s\n" \
-        +             "assistantの「%s」としての発言: %s\n", \
-        per1, per1_words, per0, per0_words)
+      pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
+        +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
+        nowstr, nowstr, per1, per1_words, per0, per0_words)
     end
   end
 end
@@ -90,6 +92,8 @@ def talk(per0, per1, per1_words, pasttalk)
   end
   # 過去の会話の追加
   system_content += pasttalk.to_s
+  # 現在時刻の追加
+  system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
   messages = []
   system_content.each_line do |line|
     messages << {"role": ROLL_SYSTEM, "content": line}
@@ -136,36 +140,48 @@ def inquiry(words, exclusions = [])
   words = NKF::nkf("-e", words) if NATTO_LANG != "UTF-8"
   nounarr = []
   noun = ""
+  nountype = ""
   nouncont = false
   parsedtext = $parser.parse(words)
   parsedtext.each_line do |line|
     line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
     if /^(.+?)\t名詞,(.+?),/ =~ line
       noun << $1
-      kind = $2
+      if nouncont
+        nountype = "熟語"
+      else
+        nountype = $2
+      end
       nouncont = true
     else
-      nounarr << noun
+      nounarr << [noun, nountype]
       noun = ""
+      nountype = ""
       nouncont = false
     end
   end
   if nouncont
-    nounarr << noun
+    nounarr << [noun, nountype]
   end
-  nounarr.each do |noun|
-    unless exclusions.include?(noun)
+  nounarr.each do |noun, nountype|
+    if exclusions.include?(noun)
+      printf("(exclusion) %s\n", noun) if DBG
+    elsif ["一般", "代名詞", "サ変接続", "副詞可能"].member?(nountype)
+      printf("(%s) %s\n", nountype, noun) if DBG
+    else
       result = nil
       begin
         result = $wkpclient.find(noun)
       rescue
       end
       if result and result.summary
-        inquiry_results << sprintf("%s : %s (Wikipedia)\n", result.title, result.summary)
+        inquiry_results << sprintf("%s : %s (Wikipedia)\n", result.title.strip, result.summary.strip)
+        printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if DBG
       else
         results = DuckDuckGo::search(:query => noun)
         if results[0]
-          inquiry_results << sprintf("%s : %s (DuckDuckGo)\n", results[0].title, results[0].description)
+          inquiry_results << sprintf("%s : %s (DuckDuckGo)\n", results[0].title.strip, results[0].description.strip)
+          printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if DBG
         end
       end
     end
