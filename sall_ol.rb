@@ -13,14 +13,15 @@ require "pp"
 NATTO_LANG = "UTF-8" # EUC-JP
 
 #LLMODEL = "gemma:2b"
-LLMODEL = "qwen2.5:1.5b"
+#LLMODEL = "qwen2.5:1.5b"
 #LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+LLMODEL = "llama3.2:1b"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
 ROLL_USEER = "user"
 
-PER0_DEF = "System"
+PER0_DEF = "Assistant"
 PER1_DEF = "Visitor"
 
 
