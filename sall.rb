@@ -8,10 +8,13 @@ require "nkf"
 require "natto"
 require "duckduckgo"
 require "wikipedia"
+require "sqlite3"
 require "pp"
 
-DBG = false # text mode debug
-NATTO_LANG = "UTF-8" # EUC-JP
+$DBG = false # text mode debug
+NATTO_LANG = "UTF-8" # EUC-JP"
+INIT_FILE  = "sall_init.txt"
+DATA_FILE  = "sall_data.sq3"
 
 #LLMODEL = "gemma:2b"
 #LLMODEL = "qwen2.5:1.5b"
@@ -56,7 +59,9 @@ def main()
       user_name = $1
     else
       time0 = Time::now
-      assistant_sentence = talk(assistant_name, user_name, user_sentence, pasttalk)
+      dbh = get_dbh()
+      assistant_sentence = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+      dbh.close
       time = Time::now - time0
       printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
@@ -67,15 +72,15 @@ def main()
   end
 end
 
-#=== 回答を求める
-def talk(assistant_name, user_name, user_sentence, pasttalk)
+#=== 会話
+def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
   if $llm_client == nil
     $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
                                   options: { server_sent_events: true })
   end
   system_content = ""
   # 語句の問い合わせ
-  inquiry_results = inquiry(user_sentence, [assistant_name, user_name])
+  inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
   if inquiry_results
     system_content += inquiry_results
   end
@@ -87,7 +92,7 @@ def talk(assistant_name, user_name, user_sentence, pasttalk)
     system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
   end
   # プロフィールの読み込み
-  open("sall_init.txt") do |rh|
+  open(INIT_FILE) do |rh|
     system_content += rh.read + "\n"
   end
   # 過去の会話の追加
@@ -115,6 +120,7 @@ def talk(assistant_name, user_name, user_sentence, pasttalk)
   return assistant_sentence
 end
 
+#=== メッセージの取得
 def get_content(response)
   content = ""
   response.each do |hash|
@@ -129,11 +135,9 @@ def get_content(response)
   return content
 end
 
-def inquiry(sentence, exclusions = [])
+#=== 語の説明を求める
+def inquiry(dbh, sentence, exclusions = [])
   inquiry_results = ""
-  unless $wkpclient
-    $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
-  end
   unless $parser
     $parser = Natto::MeCab.new
   end
@@ -164,24 +168,38 @@ def inquiry(sentence, exclusions = [])
     nounarr << [noun, nountype]
   end
   nounarr.each do |noun, nountype|
-    if exclusions.include?(noun)
-      printf("(exclusion) %s\n", noun) if DBG
-    elsif ["一般", "代名詞", "サ変接続", "副詞可能"].member?(nountype)
-      printf("(%s) %s\n", nountype, noun) if DBG
+    if exclusions.include?(noun) # 除外語
+      printf("(exclusion) %s\n", noun) if $DBG
+    elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞"].member?(nountype)
+      printf("(%s) %s\n", nountype, noun) if $DBG
     else
-      result = nil
-      begin
-        result = $wkpclient.find(noun)
-      rescue
-      end
-      if result and result.summary
-        inquiry_results << sprintf("%s : %s\n", result.title.strip, result.summary.strip)
-        printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if DBG
+      # データベースで説明を求める
+      descrip = select(dbh, noun)
+      if descrip
+        inquiry_results << sprintf("%s : %s\n", noun, descrip)
+        printf("(Database/%s) %s\n", nountype, noun) if $DBG
       else
-        results = DuckDuckGo::search(:query => noun)
-        if results[0]
-          inquiry_results << sprintf("%s : %s\n", results[0].title.strip, results[0].description.strip)
-          printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if DBG
+        # Wikipedia で説明を求める
+        result = nil
+        begin
+          unless $wkpclient
+            $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
+          end
+          result = $wkpclient.find(noun)
+        rescue
+        end
+        if result and result.summary
+          inquiry_results << sprintf("%s : %s\n", noun, result.summary.strip)
+          insert(dbh, noun, result.summary.strip, "WIKIPEDIA", level = "F")
+          printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if $DBG
+        else
+          # DuckDuckGo で説明を求める
+          results = DuckDuckGo::search(:query => noun)
+          if results[0]
+            inquiry_results << sprintf("%s : %s\n", noun, results[0].description.strip)
+            insert(dbh, noun, results[0].description.strip, "DUCKDUCKGO", level = "G")
+            printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if $DBG
+          end
         end
       end
     end
@@ -189,12 +207,68 @@ def inquiry(sentence, exclusions = [])
   return inquiry_results
 end
 
+#=== データベースハンドラの取得
 def get_dbh()
-  return nil
+  dbh = nil
+  if !FileTest::exist?(DATA_FILE)
+    sqls = []
+    sqls << <<EOT
+CREATE TABLE IF NOT EXISTS sallwords (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  word    TEXT,
+  descrip TEXT,
+  source  TEXT,
+  level   TEXT,
+  wtime   TEXT
+)
+EOT
+    dbh = SQLite3::Database.new(DATA_FILE) 
+    begin
+      sqls.each do |sql|
+        dbh.execute(sql)
+      end
+    rescue SQLite3::SQLException => err
+      puts err
+    end
+  else
+    dbh = SQLite3::Database.new(DATA_FILE)
+  end
+  return dbh
+end
+
+#=== 語の記憶
+def insert(dbh, word, descrip, source = "MANUAL", level = "C")
+  maxid = 0
+  sql = "INSERT INTO sallwords(word, descrip, source, level, wtime) VALUES(?, ?, ?, ?, DATETIME('NOW'))"
+  dbh.transaction do
+    dbh.execute(sql, [word, descrip, source, level])  
+    dbh.execute("SELECT MAX(id) FROM sallwords") do |rows|
+      maxid = rows[0]
+    end
+  end
+  return maxid
+end
+
+#=== 語の検索
+def select(dbh, word, source = nil)
+  descrip = nil
+  if source
+    sql = "SELECT descrip FROM sallwords WHERE word = ? AND source = ? ORDER BY level, wtime DESC"
+    dbh.execute(sql, [word, source]) do |rows|
+      descrip = rows[0]
+    end
+  else
+    sql = "SELECT descrip FROM sallwords WHERE word = ? ORDER BY level, wtime DESC"
+    dbh.execute(sql, [word]) do |rows|
+      descrip = rows[0]
+      break
+    end
+  end
+  return descrip
 end
 
 #= 直接呼ばれた場合は会話(CLI)を始める
 if __FILE__ == $PROGRAM_NAME
+  $DBG = true
   main()
 end
-

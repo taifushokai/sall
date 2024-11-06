@@ -6,22 +6,19 @@ require "cgi"
 require "./sall.rb"
 
 def main
-  dbh = get_dbh()
   cgi = CGI::new
-  submit       = cgi["submit"]
-  user_name    = cgi["user_name"]
-  if user_name == ""
-    user_name = "Visiter"
-  end
-  user_sentence = cgi["user_sentence"]
-  assistant_name = cgi["assistant_name"]
-  if assistant_name == ""
-    assistant_name = "Assistant"
-  end
+  submit             = cgi["submit"]
+  user_name          = cgi["user_name"]
+  user_name_new      = cgi["user_name_new"]
+  user_sentence      = cgi["user_sentence"]
+  assistant_name     = cgi["assistant_name"]
+  assistant_name_new = cgi["assistant_name_new"]
   assistant_sentence = cgi["assistant_sentence"]
-  user_sentence_new = cgi["user_sentence_new"]
+  user_sentence_new  = cgi["user_sentence_new"]
   nowstr = Time::now.strftime("%F %T")
   if user_sentence != "" or assistant_sentence != ""
+    user_name = "Visiter" if user_name == ""
+    assistant_name = "Assistant" if assistant_name == ""
     pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
       +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
       nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
@@ -29,13 +26,19 @@ def main
     pasttalk = ""
   end
   timestr = ""
+  user_name = user_name_new
+  user_name = "Visiter" if user_name == ""
+  assistant_name = assistant_name_new
+  assistant_name = "Assistant" if assistant_name == ""
   user_sentence = user_sentence_new
   if submit == "OK" && user_sentence != ""
     time0 = Time::now
-    assistant_sentence = talk(assistant_name, user_name, user_sentence, pasttalk)
+    dbh = get_dbh()
+    assistant_sentence = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+    dbh.close
     time = Time::now - time0
     timestr = sprintf("%s (%.1f)", Time::now.strftime("%F %T"), time)
-  elsif submit == "CLEAR"
+  else # submit == "CLEAR"
     user_sentence = ""
     assistant_sentence = ""
   end
@@ -91,11 +94,13 @@ Content-type: text/html
   </head>
   <body style="text-align: left;">
     <form method="POST">
-      あなたの名前 <input type="text"  name="user_name" value="#{user_name}">
+      <input type="hidden" name="user_name" value="#{user_name}" />
+      あなたの名前 <input type="text"  name="user_name_new" value="#{user_name}" />
       <br />
       <textarea name="user_sentence" rows="8" readonly>#{user_sentence}</textarea>
       <br />
-      相手の名前 <input type="text"  name="assistant_name" value="#{assistant_name}">
+      <input type="hidden" name="assistant_name" value="#{assistant_name}" />
+      相手の名前 <input type="text"  name="assistant_name_new" value="#{assistant_name}" />
       <br />
       <textarea name="assistant_sentence" rows="8" readonly>#{assistant_sentence}</textarea>
       #{timestr}
