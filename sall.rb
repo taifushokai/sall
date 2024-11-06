@@ -1,183 +1,196 @@
-#!/usr/bin/env -S ruby -Eutf-8
-# encoding: utf-8
-# small assistant by local LLM
+#!/usr/local/bin/ruby -Eutf-8
+#
+#= Ollama Chat
 
 require "rubygems"
 require "ollama-ai"
-require "sqlite3"
+require "nkf"
+require "natto"
+require "duckduckgo"
+require "wikipedia"
+require "pp"
 
-#LLM = "gemma2:2b"
-LLM = "gemma:2b"
+DBG = true
+NATTO_LANG = "UTF-8" # EUC-JP
 
-DATA_FILE   = "salldata.sq3"
-TALK_LENGTH = 1440 # 有効な会話時間[分]
+#LLMODEL = "gemma:2b"
+#LLMODEL = "qwen2.5:1.5b"
+#LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+LLMODEL = "llama3.2:1b"
 
-def main
-  dbh = get_dbh()
-  talker = "Visiter"
-  user_content = nil
-  begin
-    printf("%s >>> ", talker)
-    user_content = gets
-    if user_content
-      if user_content.strip == ""
-      elsif /^\s*name\s+(\S+)/ =~ user_content
-        talker = $1
-      elsif user_content.strip == "hist"
-        get_hist(dbh, talker).each do |dir, content|
-          printf("%s: %s\n", dir, content.to_s.strip)
-        end
-      else
-        lastid = insert(dbh, talker, "user", user_content)
-        pid = fork do
-          asst_content = talk(dbh, talker, user_content)
-        end
-        th = Process::detach(pid) # 子プロセス監視スレッド
-        while th.status
-          sleep 0.5
-        end
-        asst_content = select(dbh, talker, "asst", lastid)
-        printf("%s\n", asst_content)
-      end
+ROLL_SYSTEM = "system"
+ROLL_ASSISTANT = "assistant"
+ROLL_USEER = "user"
+
+PER0_DEF = "Assistant"
+PER1_DEF = "Visitor"
+
+
+$llm_client = nil
+$parser = nil
+
+#=== main
+def main()
+  per0 = PER0_DEF
+  per1 = PER1_DEF
+  pasttalk = ""
+  loop do
+    if per1 == "Visitor"
+      printf("%s あなた > ", Time::now.strftime("%T"))
+    else
+      printf("%s %s > ", Time::now.strftime("%T"), per1) 
     end
-  end while user_content
-  printf("\n")
+    getbuf = gets()
+    if getbuf == nil
+      printf("\n")
+      break
+    end
+    per1_words = getbuf.strip
+    wordscmd = per1_words[0..80].downcase.strip
+    if wordscmd == ""
+    elsif wordscmd == "bye"
+      break
+    elsif /you're\s+(\S+)/i =~ wordscmd
+      per0 = $1
+    elsif /i'm\s+(\S+)/i =~ wordscmd
+      per1 = $1
+    else
+      time0 = Time::now
+      per0_words = talk(per0, per1, per1_words, pasttalk)
+      time = Time::now - time0
+      nowstr = Time::now.strftime("%F %T")
+      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, per0, per0_words)
+      pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
+        +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
+        nowstr, nowstr, per1, per1_words, per0, per0_words)
+    end
+  end
 end
 
-def talk(dbh, talker, user_content)
-  messages = []
-  # 初期知識を読み込む
-  sql = "SELECT content FROM salltext WHERE dir = 'system' ORDER BY id"
-  dbh.execute(sql) do |row|
-    messages << { role: "system", content: row[0] }
-  end
-  # ユーザとの会話を読み込む
-  asst_cnt = 0
-  get_hist(dbh, talker).each do |dir, content|
-    case dir
-    when "assistant"
-      messages << { role: "assistant", content: content }
-      asst_cnt += 1
-    when "user"
-      messages << { role: "user",      content: content }
-    end
-  end
-  if asst_cnt == 0
-    messages << { role: "assistant", content: "質問はなんですか？" }
-  end
-  # ユーザの発言を追加
-  messages << { role: "user", content: user_content }
-
+#=== 回答を求める
+def talk(per0, per1, per1_words, pasttalk)
   if $llm_client == nil
     $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
-                                            options: { server_sent_events: true })
+                                  options: { server_sent_events: true })
   end
-  asst_content = nil
-  sql = "INSERT INTO salltext(wtime, talker, dir, content) VALUES(DATETIME('NOW'), ?, ?, ?)"
-  dbh.transaction do
-    result = $llm_client.chat({ model: LLM, messages: messages })
-    asst_content = get_content(result)
-    dbh.execute(sql, [talker, "asst", asst_content])
+  system_content = ""
+  # 語句の問い合わせ
+  inquiry_results = inquiry(per1_words, [per0, per1])
+  if inquiry_results
+    system_content += inquiry_results
   end
-  return asst_content
+  # 名前のの設定
+  if per0 != PER0_DEF
+    system_content += "#{ROLL_ASSISTANT} は #{per0} の役です。\n"
+  end
+  if per1 != PER1_DEF
+    system_content += "#{ROLL_USEER} の名前は #{per1} です。\n"
+  end
+  # プロフィールの読み込み
+  open("sall_init.txt") do |rh|
+    system_content += rh.read + "\n"
+  end
+  # 過去の会話の追加
+  system_content += pasttalk.to_s
+  # 現在時刻の追加
+  system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
+  messages = []
+  system_content.each_line do |line|
+    messages << {"role": ROLL_SYSTEM, "content": line}
+  end
+  messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
+  messages << {"role": ROLL_USEER, "content": per1_words}
+  #puts messages
+  chatdata = {
+    model: LLMODEL,
+    messages: messages
+  }
+  response = $llm_client.chat(chatdata)
+  per0_words = get_content(response)
+  if /^\(.+?として\)/ =~ per0_words
+    per0_words = Regexp.last_match.post_match
+  elsif /『(.+?)』/ =~ per0_words
+    per0_words = $1
+  end
+  return per0_words
 end
 
-def get_content(result)
+def get_content(response)
   content = ""
-  result.each do |hash|
+  response.each do |hash|
     message = hash["message"]
-    if message and message["role"] == "assistant"
+    if message and message["role"] == ROLL_ASSISTANT
       content += message["content"].to_s
     end
   end
+  content.gsub!("</start_of_turn>", "")
+  content.gsub!("</end_of_turn>", "")
+  content.strip!
   return content
 end
 
-def get_dbh()
-  dbh = nil
-  if !FileTest::exist?(DATA_FILE)
-    sqls = []
-    sqls << <<EOT
-CREATE TABLE IF NOT EXISTS salltext (
-  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  wtime   TEXT,
-  talker  TEXT,
-  dir     TEXT,
-  content TEXT
-)
-EOT
-    dbh = SQLite3::Database.new(DATA_FILE) 
-    begin
-      sqls.each do |sql|
-        dbh.execute(sql)
+def inquiry(words, exclusions = [])
+  inquiry_results = ""
+  unless $wkpclient
+    $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
+  end
+  unless $parser
+    $parser = Natto::MeCab.new
+  end
+  words = NKF::nkf("-e", words) if NATTO_LANG != "UTF-8"
+  nounarr = []
+  noun = ""
+  nountype = ""
+  nouncont = false
+  parsedtext = $parser.parse(words)
+  parsedtext.each_line do |line|
+    line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
+    if /^(.+?)\t名詞,(.+?),/ =~ line
+      noun << $1
+      if nouncont
+        nountype = "熟語"
+      else
+        nountype = $2
       end
-    rescue SQLite3::SQLException => err
-      puts err
+      nouncont = true
+    else
+      nounarr << [noun, nountype]
+      noun = ""
+      nountype = ""
+      nouncont = false
     end
-
-    # 初期データの例
-    insert(dbh, "", "system", "光子は電磁相互作用を媒介するゲージ粒子で、ガンマ線の正体であり γ で表されることが多い。")
-    insert(dbh, "", "system", "ウィークボソンは弱い相互作用を媒介するゲージ粒子で、質量を持つ。")
-    insert(dbh, "", "system", "Wボソンは電荷±1をもつウィークボソンで、ベータ崩壊を起こすゲージ粒子である。W+, W−で表され、互いに反粒子の関係にある。")
-    insert(dbh, "", "system", "Zボソンは電荷をもたないウィークボソンで、ワインバーグ＝サラム理論により予言され、後に発見された。Z0 と書かれることもある。")
-    insert(dbh, "", "system", "グルーオンは強い相互作用を媒介するゲージ粒子で、カラーSU(3)の下で8種類存在する（8重項）。")
-    insert(dbh, "", "system", "XボソンとYボソンはジョージ＝グラショウ模型において導入される未発見のゲージ粒子である。")
-    insert(dbh, "", "system", "重力子（グラビトン）は重力を媒介する未発見のゲージ粒子で、スピン2のテンソル粒子と考えられている。")
-  else
-    dbh = SQLite3::Database.new(DATA_FILE) 
   end
-  return dbh
+  if nouncont
+    nounarr << [noun, nountype]
+  end
+  nounarr.each do |noun, nountype|
+    if exclusions.include?(noun)
+      printf("(exclusion) %s\n", noun) if DBG
+    elsif ["一般", "代名詞", "サ変接続", "副詞可能"].member?(nountype)
+      printf("(%s) %s\n", nountype, noun) if DBG
+    else
+      result = nil
+      begin
+        result = $wkpclient.find(noun)
+      rescue
+      end
+      if result and result.summary
+        inquiry_results << sprintf("%s : %s (Wikipedia)\n", result.title.strip, result.summary.strip)
+        printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if DBG
+      else
+        results = DuckDuckGo::search(:query => noun)
+        if results[0]
+          inquiry_results << sprintf("%s : %s (DuckDuckGo)\n", results[0].title.strip, results[0].description.strip)
+          printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if DBG
+        end
+      end
+    end
+  end
+  return inquiry_results
 end
 
-def insert(dbh, talker, dir, content)
-  maxid = 0
-  sql = "INSERT INTO salltext(wtime, talker, dir, content) VALUES(DATETIME('NOW'), ?, ?, ?)"
-  dbh.transaction do
-    dbh.execute(sql, [talker, dir, content])  
-    dbh.execute("SELECT MAX(id) FROM salltext") do |rows|
-      maxid = rows[0]
-    end
-  end
-  return maxid
+#= 直接呼ばれた場合は会話(CLI)を始める
+if __FILE__ == $PROGRAM_NAME
+  main()
 end
-
-def select(dbh, talker, dir, lastid = nil)
-  content = nil
-  if lastid
-    sql = "SELECT content FROM salltext WHERE talker = ? AND dir = ? AND id > ? ORDER BY ID"
-    dbh.execute(sql, [talker, dir, lastid]) do |rows|
-      content = rows[0]
-    end
-  else
-    sql = "SELECT content FROM salltext WHERE id = (SELECT MAX(ID) FROM salltext WHERE talker = ? AND dir = ?)"
-    dbh.execute(sql, [talker, dir]) do |rows|
-      content = rows[0]
-    end
-  end
-  return content
-end
-
-def get_hist(dbh, talker, max = nil)
-  histarr = []
-  sql = "SELECT dir, content FROM salltext WHERE talker = ? AND wtime >= DATETIME('NOW', '-#{TALK_LENGTH} MINUTES') ORDER BY id"
-  dbh.execute(sql, [talker]) do |row|
-    (dir, content) = *row
-    case dir
-    when "user"
-      histarr << ["user", content]
-    when "asst"
-      histarr << ["assistant", content]
-    end
-  end
-  if max
-    max = max.to_i
-    eoa = histarr.size - 1
-    boa = eoa - max + 1
-    boa = 0 if boa < 0
-    histarr = histarr[boa .. eoa]
-  end
-  return histarr
-end
-
-main if __FILE__ == $0
 
