@@ -21,17 +21,23 @@ def main
   assistant_sentence = cgi["assistant_sentence"]
   user_sentence_new = cgi["user_sentence_new"]
   nowstr = Time::now.strftime("%F %T")
-  pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
-    +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
-    nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
+  if user_sentence != "" or assistant_sentence != ""
+    pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
+      +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
+      nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
+  else
+    pasttalk = ""
+  end
   timestr = ""
+  user_sentence = user_sentence_new
   if submit == "OK" && user_sentence != ""
     time0 = Time::now
-    user_sentence = user_sentence_new
     assistant_sentence = talk(assistant_name, user_name, user_sentence, pasttalk)
     time = Time::now - time0
     timestr = sprintf("%s (%.1f)", Time::now.strftime("%F %T"), time)
   elsif submit == "CLEAR"
+    user_sentence = ""
+    assistant_sentence = ""
   end
   output(user_name, user_sentence, assistant_name, assistant_sentence, timestr)
 end
@@ -89,11 +95,13 @@ Content-type: text/html
       <br />
       <textarea name="user_sentence" rows="8" readonly>#{user_sentence}</textarea>
       <br />
-      <input type="text"  name="assistant_name" value="#{assistant_name}">
+      相手の名前 <input type="text"  name="assistant_name" value="#{assistant_name}">
       <br />
       <textarea name="assistant_sentence" rows="8" readonly>#{assistant_sentence}</textarea>
       #{timestr}
       <br />
+      <br />
+      入力欄
       <br />
       <textarea name="user_sentence_new" rows="8"></textarea>
       <div style="text-align: center;">

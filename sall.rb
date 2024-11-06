@@ -1,4 +1,4 @@
-#!/usr/local/bin/ruby -Eutf-8
+#!/usr/bin/env -S ruby -Eutf-8
 #
 #= Ollama Chat
 
