@@ -13,33 +13,34 @@ def main
   if user_name == ""
     user_name = "Visiter"
   end
-  user_content = cgi["user_content"]
-  if submit == "OK" && user_content != ""
-    (asst_content, user_name) = talk(dbh, user_name, user_content)
+  user_sentence = cgi["user_sentence"]
+  assistant_name = cgi["assistant_name"]
+  if assistant_name == ""
+    assistant_name = "Assistant"
+  end
+  assistant_sentence = cgi["assistant_sentence"]
+  user_sentence_new = cgi["user_sentence_new"]
+  nowstr = Time::now.strftime("%F %T")
+  pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
+    +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
+    nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
+  timestr = ""
+  if submit == "OK" && user_sentence != ""
+    time0 = Time::now
+    user_sentence = user_sentence_new
+    assistant_sentence = talk(assistant_name, user_name, user_sentence, pasttalk)
+    time = Time::now - time0
+    timestr = sprintf("%s (%.1f)", Time::now.strftime("%F %T"), time)
   elsif submit == "CLEAR"
-    # どちらにしろ user_content は空になる
   end
-  hist = ""
-  get_hist(dbh, user_name, 20).each do |dir, content|
-    if dir == "user"
-      hist << sprintf("%s: %s\n", user_name, content.to_s.strip)
-    else
-      hist << sprintf("%s: %s\n", dir, content.to_s.strip)
-    end
-  end
-  output(hist, user_name)
+  output(user_name, user_sentence, assistant_name, assistant_sentence, timestr)
 end
 
-def output(hist, user_name)
-  hist = CGI::escapeHTML(hist)
-  user_name = CGI::escapeHTML(user_name)
-
-  histbuf = hist.split("\n")
-  eoa = histbuf.size - 1
-  boa = eoa - 16 + 1 # なるべくtextarea に全体を表示させる
-  boa = 0 if boa < 0
-  hist = histbuf[boa .. eoa].join("\n")
-
+def output(user_name, user_sentence, assistant_name, assistant_sentence, timestr)
+  user_name = CGI::escapeHTML(user_name.to_s)
+  user_sentence = CGI::escapeHTML(user_sentence.to_s)
+  assistant_name = CGI::escapeHTML(assistant_name.to_s)
+  assistant_sentence = CGI::escapeHTML(assistant_sentence.to_s)
   print <<EOT
 Content-type: text/html
 
@@ -84,14 +85,17 @@ Content-type: text/html
   </head>
   <body style="text-align: left;">
     <form method="POST">
-      話の流れ
-      <br />
-      <textarea name="hist" rows="24" readonly>#{hist}</textarea>
       あなたの名前 <input type="text"  name="user_name" value="#{user_name}">
       <br />
-      あなたの話
+      <textarea name="user_sentence" rows="8" readonly>#{user_sentence}</textarea>
       <br />
-      <textarea name="user_content" rows="8"></textarea>
+      <input type="text"  name="assistant_name" value="#{assistant_name}">
+      <br />
+      <textarea name="assistant_sentence" rows="8" readonly>#{assistant_sentence}</textarea>
+      #{timestr}
+      <br />
+      <br />
+      <textarea name="user_sentence_new" rows="8"></textarea>
       <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />

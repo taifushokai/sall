@@ -10,7 +10,7 @@ require "duckduckgo"
 require "wikipedia"
 require "pp"
 
-DBG = true
+DBG = false # text mode debug
 NATTO_LANG = "UTF-8" # EUC-JP
 
 #LLMODEL = "gemma:2b"
@@ -22,8 +22,8 @@ ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
 ROLL_USEER = "user"
 
-PER0_DEF = "Assistant"
-PER1_DEF = "Visitor"
+ASSISTANT_DEF = "Assistant"
+USER_DEF = "Visitor"
 
 
 $llm_client = nil
@@ -31,60 +31,60 @@ $parser = nil
 
 #=== main
 def main()
-  per0 = PER0_DEF
-  per1 = PER1_DEF
+  assistant_name = ASSISTANT_DEF
+  user_name = USER_DEF
   pasttalk = ""
   loop do
-    if per1 == "Visitor"
+    if user_name == "Visitor"
       printf("%s あなた > ", Time::now.strftime("%T"))
     else
-      printf("%s %s > ", Time::now.strftime("%T"), per1) 
+      printf("%s %s > ", Time::now.strftime("%T"), user_name) 
     end
     getbuf = gets()
     if getbuf == nil
       printf("\n")
       break
     end
-    per1_words = getbuf.strip
-    wordscmd = per1_words[0..80].downcase.strip
-    if wordscmd == ""
-    elsif wordscmd == "bye"
+    user_sentence = getbuf.strip
+    cliches = user_sentence[0..80].downcase.strip
+    if cliches == ""
+    elsif cliches == "bye"
       break
-    elsif /you're\s+(\S+)/i =~ wordscmd
-      per0 = $1
-    elsif /i'm\s+(\S+)/i =~ wordscmd
-      per1 = $1
+    elsif /you're\s+(\S+)/i =~ cliches
+      assistant_name = $1
+    elsif /i'm\s+(\S+)/i =~ cliches
+      user_name = $1
     else
       time0 = Time::now
-      per0_words = talk(per0, per1, per1_words, pasttalk)
+      assistant_sentence = talk(assistant_name, user_name, user_sentence, pasttalk)
       time = Time::now - time0
+      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
-      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, per0, per0_words)
       pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
         +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
-        nowstr, nowstr, per1, per1_words, per0, per0_words)
+        nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
     end
   end
 end
 
 #=== 回答を求める
-def talk(per0, per1, per1_words, pasttalk)
+def talk(assistant_name, user_name, user_sentence, pasttalk)
   if $llm_client == nil
     $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
                                   options: { server_sent_events: true })
   end
   system_content = ""
   # 語句の問い合わせ
-  inquiry_results = inquiry(per1_words, [per0, per1])
+  inquiry_results = inquiry(user_sentence, [assistant_name, user_name])
   if inquiry_results
     system_content += inquiry_results
   end
   # 名前のの設定
-  if per0 != PER0_DEF
-    system_content += "#{ROLL_ASSISTANT} は #{per0} の役です。\n"
+  if assistant_name != ASSISTANT_DEF
+    system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
   end
-  if per1 != PER1_DEF
-    system_content += "#{ROLL_USEER} の名前は #{per1} です。\n"
+  if user_name != USER_DEF
+    system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
   end
   # プロフィールの読み込み
   open("sall_init.txt") do |rh|
@@ -99,20 +99,20 @@ def talk(per0, per1, per1_words, pasttalk)
     messages << {"role": ROLL_SYSTEM, "content": line}
   end
   messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
-  messages << {"role": ROLL_USEER, "content": per1_words}
+  messages << {"role": ROLL_USEER, "content": user_sentence}
   #puts messages
   chatdata = {
     model: LLMODEL,
     messages: messages
   }
   response = $llm_client.chat(chatdata)
-  per0_words = get_content(response)
-  if /^\(.+?として\)/ =~ per0_words
-    per0_words = Regexp.last_match.post_match
-  elsif /『(.+?)』/ =~ per0_words
-    per0_words = $1
+  assistant_sentence = get_content(response)
+  if /^\(.+?として\)/ =~ assistant_sentence
+    assistant_sentence = Regexp.last_match.post_match
+  elsif /『(.+?)』/ =~ assistant_sentence
+    assistant_sentence = $1
   end
-  return per0_words
+  return assistant_sentence
 end
 
 def get_content(response)
@@ -129,7 +129,7 @@ def get_content(response)
   return content
 end
 
-def inquiry(words, exclusions = [])
+def inquiry(sentence, exclusions = [])
   inquiry_results = ""
   unless $wkpclient
     $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
@@ -137,12 +137,12 @@ def inquiry(words, exclusions = [])
   unless $parser
     $parser = Natto::MeCab.new
   end
-  words = NKF::nkf("-e", words) if NATTO_LANG != "UTF-8"
+  sentence = NKF::nkf("-e", sentence) if NATTO_LANG != "UTF-8"
   nounarr = []
   noun = ""
   nountype = ""
   nouncont = false
-  parsedtext = $parser.parse(words)
+  parsedtext = $parser.parse(sentence)
   parsedtext.each_line do |line|
     line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
     if /^(.+?)\t名詞,(.+?),/ =~ line
@@ -175,18 +175,22 @@ def inquiry(words, exclusions = [])
       rescue
       end
       if result and result.summary
-        inquiry_results << sprintf("%s : %s (Wikipedia)\n", result.title.strip, result.summary.strip)
+        inquiry_results << sprintf("%s : %s\n", result.title.strip, result.summary.strip)
         printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if DBG
       else
         results = DuckDuckGo::search(:query => noun)
         if results[0]
-          inquiry_results << sprintf("%s : %s (DuckDuckGo)\n", results[0].title.strip, results[0].description.strip)
+          inquiry_results << sprintf("%s : %s\n", results[0].title.strip, results[0].description.strip)
           printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if DBG
         end
       end
     end
   end
   return inquiry_results
+end
+
+def get_dbh()
+  return nil
 end
 
 #= 直接呼ばれた場合は会話(CLI)を始める
