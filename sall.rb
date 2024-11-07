@@ -2,14 +2,12 @@
 #
 #= Ollama Chat
 
-require "rubygems"
 require "ollama-ai"
 require "nkf"
 require "natto"
 require "duckduckgo"
 require "wikipedia"
 require "sqlite3"
-require "pp"
 
 $DBG = false # text mode debug
 NATTO_LANG = "UTF-8" # EUC-JP"

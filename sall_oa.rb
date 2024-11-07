@@ -1,82 +1,92 @@
-#!/usr/local/bin/ruby -Eutf-8
+#!/usr/bin/env -S ruby -Eutf-8
 #
 #= OpenAI Chat
 
 require "openai"
-require "pp"
 
+$DBG = false # text mode debug
+INIT_FILE  = "sall_init.txt"
 LLMODEL = "gpt-4o"
-PER0_DEF = "System"
-PER1_DEF = "Visitor"
-$llm_client = nil
-$hist = []
+
+ROLL_SYSTEM = "system"
+ROLL_ASSISTANT = "assistant"
+ROLL_USEER = "user"
+
+ASSISTANT_DEF = "Assistant"
+USER_DEF = "Visitor"
 
 #=== main
 def main()
-  per0 = PER0_DEF
-  per1 = PER1_DEF
+  assistant_name = ASSISTANT_DEF
+  user_name = USER_DEF
+  pasttalk = ""
   loop do
-    if per1 == "Visitor"
-      printf("あなた > ")
+    if user_name == "Visitor"
+      printf("%s あなた > ", Time::now.strftime("%T"))
     else
-      printf("%s > ", per1) 
+      printf("%s %s > ", Time::now.strftime("%T"), user_name) 
     end
-    per1_words = gets().to_s.strip
-    wordscmd = per1_words[0..80].downcase.strip
-    if wordscmd == ""
-    elsif wordscmd == "bye"
+    getbuf = gets()
+    if getbuf == nil
+      printf("\n")
       break
-    elsif /you're\s+(\S+)/i =~ wordscmd
-      per0 = $1
-    elsif /i'm\s+(\S+)/i =~ wordscmd
-      per1 = $1
+    end
+    user_sentence = getbuf.strip
+    cliches = user_sentence[0..80].downcase.strip
+    if cliches == ""
+    elsif cliches == "bye"
+      break
+    elsif /you're\s+(\S+)/i =~ cliches
+      assistant_name = $1
+    elsif /i'm\s+(\S+)/i =~ cliches
+      user_name = $1
     else
-      per0_words = talk(per0, per1, per1_words)
-      printf("%s : %s\n", per0, per0_words)
+      time0 = Time::now
+      assistant_sentence = talk(nil, assistant_name, user_name, user_sentence, pasttalk)
+      time = Time::now - time0
+      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, assistant_name, assistant_sentence)
+      nowstr = Time::now.strftime("%F %T")
+      pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
+        +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
+        nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
     end
   end
 end
 
-#=== 回答を求める
-def talk(per0, per1, per1_words)
+#=== 会話
+def talk(dummy, assistant_name, user_name, user_sentence, pasttalk)
   if $llm_client == nil
     $llm_client = OpenAI::Client.new(access_token: ENV.fetch("OPENAI_API_KEY"))
   end
   system_content = ""
-  open("sall_init.txt") do |rh|
-    system_content = rh.read
+  # 名前のの設定
+  if assistant_name != ASSISTANT_DEF
+    system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
   end
-  if per0 != PER0_DEF
-    system_content += "\n assistant は #{per0} の役です。"
+  if user_name != USER_DEF
+    system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
   end
-  if per1 != PER1_DEF
-    system_content += "\n user の名前は #{per1} です。"
+  # プロフィールの読み込み
+  open(INIT_FILE) do |rh|
+    system_content += rh.read + "\n"
   end
-  messages = [{"role": "system", "content": system_content}]
-  $hist.each do |per1_hist, per0_hist|
-    messages << {"role": "user", "content": per1_hist}
-    messages << {"role": "assistant" , "content": per0_hist}
+  # 過去の会話の追加
+  system_content += pasttalk.to_s
+  # 現在時刻の追加
+  system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
+  messages = []
+  system_content.each_line do |line|
+    messages << {"role": ROLL_SYSTEM, "content": line}
   end
-  messages << {"role": "user", "content": per1_words}
+  messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
+  messages << {"role": ROLL_USEER, "content": user_sentence}
   chatdata = {
     model: LLMODEL,
     messages: messages
   }
   response = $llm_client.chat(parameters: chatdata)
-  per0_words = response.dig("choices", 0, "message", "content")
-  if /『(.+?)』/ =~ per0_words
-    per0_words = $1
-  end
-  per0_hist = per0_words
-  if per0 != PER0_DEF
-    per0_hist = "(#{per0} として)" + per0_words
-  end
-  per1_hist = per1_words
-  if per1 != PER1_DEF
-    per1_hist = "(#{per1} として)" + per1_words
-  end
-  $hist << [per1_hist, per0_hist]
-  return per0_words
+  assistant_sentence = response.dig("choices", 0, "message", "content")
+  return assistant_sentence
 end
 
 #= 直接呼ばれた場合は会話(CLI)を始める
