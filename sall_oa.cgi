@@ -55,7 +55,7 @@ Content-type: text/html
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>small assistant by local LLM</title>
+    <title>small assistant</title>
     <style>
       textarea {
         background: #f8f8f8;
@@ -115,6 +115,7 @@ Content-type: text/html
       </dev>
     </form>
     <br />
+    <span align="right">GPT</span>
   </body>
 </html>
 EOT
