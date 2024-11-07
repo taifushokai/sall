@@ -115,7 +115,7 @@ Content-type: text/html
       </dev>
     </form>
     <br />
-    <span align="right">GPT</span>
+    <div style="text-align: right;">GPT</div>
   </body>
 </html>
 EOT
