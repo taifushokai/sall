@@ -166,16 +166,16 @@ def inquiry(dbh, sentence, exclusions = [])
     nounarr << [noun, nountype]
   end
   nounarr.each do |noun, nountype|
-    if exclusions.include?(noun) # 除外語
-      printf("(exclusion) %s\n", noun) if $DBG
-    elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞"].member?(nountype)
-      printf("(%s) %s\n", nountype, noun) if $DBG
+    # データベースで説明を求める
+    descrip = select(dbh, noun)
+    if descrip
+      inquiry_results << sprintf("%s : %s\n", noun, descrip)
+      printf("(Database/%s) %s\n", nountype, noun) if $DBG
     else
-      # データベースで説明を求める
-      descrip = select(dbh, noun)
-      if descrip
-        inquiry_results << sprintf("%s : %s\n", noun, descrip)
-        printf("(Database/%s) %s\n", nountype, noun) if $DBG
+      if exclusions.include?(noun) # 除外語
+        printf("(exclusion) %s\n", noun) if $DBG
+      elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞"].member?(nountype)
+        printf("(%s) %s\n", nountype, noun) if $DBG
       else
         # Wikipedia で説明を求める
         result = nil
