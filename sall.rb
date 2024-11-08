@@ -58,10 +58,10 @@ def main()
     else
       time0 = Time::now
       dbh = get_dbh()
-      assistant_sentence = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+      assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       dbh.close
       time = Time::now - time0
-      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, assistant_name, assistant_sentence)
+      printf("%s(%.1f,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, insize, outsize, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
       pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
         +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
@@ -108,14 +108,16 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     model: LLMODEL,
     messages: messages
   }
+  insize = chatdata.to_s.size
   response = $llm_client.chat(chatdata)
+  outsize = response.to_s.size
   assistant_sentence = get_content(response)
   if /^\(.+?として\)/ =~ assistant_sentence
     assistant_sentence = Regexp.last_match.post_match
   elsif /『(.+?)』/ =~ assistant_sentence
     assistant_sentence = $1
   end
-  return assistant_sentence
+  return assistant_sentence, insize, outsize
 end
 
 #=== メッセージの取得
@@ -174,7 +176,7 @@ def inquiry(dbh, sentence, exclusions = [])
     else
       if exclusions.include?(noun) # 除外語
         printf("(exclusion) %s\n", noun) if $DBG
-      elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞"].member?(nountype)
+      elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞", "非自立"].member?(nountype)
         printf("(%s) %s\n", nountype, noun) if $DBG
       else
         # Wikipedia で説明を求める

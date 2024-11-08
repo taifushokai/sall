@@ -95,18 +95,18 @@ Content-type: text/html
       <input type="hidden" name="user_name" value="#{user_name}" />
       あなたの名前 <input type="text"  name="user_name_new" value="#{user_name}" />
       <br />
-      <textarea name="user_sentence" rows="8" readonly>#{user_sentence}</textarea>
+      <textarea name="user_sentence" rows="2" readonly>#{user_sentence}</textarea>
       <br />
       <input type="hidden" name="assistant_name" value="#{assistant_name}" />
       相手の名前 <input type="text"  name="assistant_name_new" value="#{assistant_name}" />
       <br />
-      <textarea name="assistant_sentence" rows="8" readonly>#{assistant_sentence}</textarea>
+      <textarea name="assistant_sentence" rows="10" readonly>#{assistant_sentence}</textarea>
       #{timestr}
       <br />
       <br />
       入力欄
       <br />
-      <textarea name="user_sentence_new" rows="8"></textarea>
+      <textarea name="user_sentence_new" rows="2"></textarea>
       <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />
