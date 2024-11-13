@@ -1,18 +1,17 @@
 #!/usr/bin/env -S ruby -Eutf-8
-#
-#= Ollama Chat
+# encoding: utf-8
+# small assistant by local LLM CGI
 
 require "ollama-ai"
 require "nkf"
 require "natto"
 require "duckduckgo"
 require "wikipedia"
-require "sqlite3"
+require "./sallwords_util.rb"
 
 $DBG = false # text mode debug
 NATTO_LANG = "UTF-8" # EUC-JP"
 INIT_FILE  = "sall_init.txt"
-DATA_FILE  = "sall_data.sq3"
 
 #LLMODEL = "gemma:2b"
 #LLMODEL = "qwen2.5:1.5b"
@@ -205,66 +204,6 @@ def inquiry(dbh, sentence, exclusions = [])
     end
   end
   return inquiry_results
-end
-
-#=== データベースハンドラの取得
-def get_dbh()
-  dbh = nil
-  if !FileTest::exist?(DATA_FILE)
-    sqls = []
-    sqls << <<EOT
-CREATE TABLE IF NOT EXISTS sallwords (
-  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  word    TEXT,
-  descrip TEXT,
-  source  TEXT,
-  level   TEXT,
-  wtime   TEXT
-)
-EOT
-    dbh = SQLite3::Database.new(DATA_FILE) 
-    begin
-      sqls.each do |sql|
-        dbh.execute(sql)
-      end
-    rescue SQLite3::SQLException => err
-      puts err
-    end
-  else
-    dbh = SQLite3::Database.new(DATA_FILE)
-  end
-  return dbh
-end
-
-#=== 語の記憶
-def insert(dbh, word, descrip, source = "MANUAL", level = "C")
-  maxid = 0
-  sql = "INSERT INTO sallwords(word, descrip, source, level, wtime) VALUES(?, ?, ?, ?, DATETIME('NOW'))"
-  dbh.transaction do
-    dbh.execute(sql, [word, descrip, source, level])  
-    dbh.execute("SELECT MAX(id) FROM sallwords") do |rows|
-      maxid = rows[0]
-    end
-  end
-  return maxid
-end
-
-#=== 語の検索
-def select(dbh, word, source = nil)
-  descrip = nil
-  if source
-    sql = "SELECT descrip FROM sallwords WHERE word = ? AND source = ? ORDER BY level, wtime DESC"
-    dbh.execute(sql, [word, source]) do |rows|
-      descrip = rows[0]
-    end
-  else
-    sql = "SELECT descrip FROM sallwords WHERE word = ? ORDER BY level, wtime DESC"
-    dbh.execute(sql, [word]) do |rows|
-      descrip = rows[0]
-      break
-    end
-  end
-  return descrip
 end
 
 #= 直接呼ばれた場合は会話(CLI)を始める

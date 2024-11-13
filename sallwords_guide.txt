@@ -1,0 +1,28 @@
+・スキーマ
+CREATE TABLE sallwords (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  word    TEXT,
+  descrip TEXT,
+  source  TEXT,
+  level   TEXT,
+  wtime   TEXT
+);
+
+
+・テキストフォーマット
+==={id} {level} {source} {wtime}
+{word}
+{descrip}
+^^^
+
+DEFAULT
+level    C
+source   MANUAL
+wtime    処理時間(UTC)
+
+
+・コマンド
+===ADD       追加
+===123       変更
+===DEL123    削除
+===DELALL    全削除

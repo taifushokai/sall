@@ -108,7 +108,7 @@ Content-type: text/html
       <br />
       入力欄
       <br />
-      <textarea name="user_sentence_new" rows="2"></textarea>
+      <textarea name="user_sentence_new" rows="2" style="background: #ffe8c8;"></textarea>
       <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />

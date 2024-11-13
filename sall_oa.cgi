@@ -1,6 +1,6 @@
 #!/usr/bin/env -S ruby -Eutf-8
 # encoding: utf-8
-# small assistant by OpenAI
+# test assistant by OpenAI
 
 require "cgi"
 require "./sall_oa.rb"
@@ -55,7 +55,7 @@ Content-type: text/html
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>small assistant</title>
+    <title>test assistant</title>
     <style>
       textarea {
         background: #f8f8f8;
@@ -106,7 +106,7 @@ Content-type: text/html
       <br />
       入力欄
       <br />
-      <textarea name="user_sentence_new" rows="2"></textarea>
+      <textarea name="user_sentence_new" rows="2" style="background: #ffe8c8;"></textarea>
       <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />
