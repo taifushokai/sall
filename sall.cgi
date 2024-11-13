@@ -34,7 +34,7 @@ def main
   if submit == "OK" && user_sentence != ""
     time0 = Time::now
     dbh = get_dbh()
-    assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+    user_sentence, assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     dbh.close
     time = Time::now - time0
     timestr = sprintf("%s (%.1f, in %d, out %d)", Time::now.strftime("%F %T"), time, insize, outsize)
@@ -108,7 +108,7 @@ Content-type: text/html
       <br />
       入力欄
       <br />
-      <textarea name="user_sentence_new" rows="2" style="background: #ffe8c8;"></textarea>
+      <textarea name="user_sentence_new" rows="4" style="background: #ffe8c8;"></textarea>
       <div style="text-align: center;">
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="OK" />

@@ -71,52 +71,62 @@ end
 
 #=== 会話
 def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
-  if $llm_client == nil
-    $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
-                                  options: { server_sent_events: true })
+  if /^===(\S+)/ =~ user_sentence
+    word = $1
+    descrip = Regexp.last_match.post_match.strip
+    insert(dbh, word, descrip)
+    user_sentence = sprintf("「%s」とは", word)
+    assistant_sentence = descrip
+    insize = 0
+    outsize = 0
+  else
+    if $llm_client == nil
+      $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
+                                    options: { server_sent_events: true })
+    end
+    system_content = ""
+    # 語句の問い合わせ
+    inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
+    if inquiry_results
+      system_content += inquiry_results
+    end
+    # 名前のの設定
+    if assistant_name != ASSISTANT_DEF
+      system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
+    end
+    if user_name != USER_DEF
+      system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
+    end
+    # プロフィールの読み込み
+    open(INIT_FILE) do |rh|
+      system_content += rh.read + "\n"
+    end
+    # 過去の会話の追加
+    system_content += pasttalk.to_s
+    # 現在時刻の追加
+    system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
+    messages = []
+    system_content.each_line do |line|
+      messages << {"role": ROLL_SYSTEM, "content": line}
+    end
+    messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
+    messages << {"role": ROLL_USEER, "content": user_sentence}
+    #puts messages
+    chatdata = {
+      model: LLMODEL,
+      messages: messages
+    }
+    insize = chatdata.to_s.size
+    response = $llm_client.chat(chatdata)
+    outsize = response.to_s.size
+    assistant_sentence = get_content(response)
+    if /^\(.+?として\)/ =~ assistant_sentence
+      assistant_sentence = Regexp.last_match.post_match
+    elsif /『(.+?)』/ =~ assistant_sentence
+      assistant_sentence = $1
+    end
   end
-  system_content = ""
-  # 語句の問い合わせ
-  inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
-  if inquiry_results
-    system_content += inquiry_results
-  end
-  # 名前のの設定
-  if assistant_name != ASSISTANT_DEF
-    system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
-  end
-  if user_name != USER_DEF
-    system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
-  end
-  # プロフィールの読み込み
-  open(INIT_FILE) do |rh|
-    system_content += rh.read + "\n"
-  end
-  # 過去の会話の追加
-  system_content += pasttalk.to_s
-  # 現在時刻の追加
-  system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
-  messages = []
-  system_content.each_line do |line|
-    messages << {"role": ROLL_SYSTEM, "content": line}
-  end
-  messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
-  messages << {"role": ROLL_USEER, "content": user_sentence}
-  #puts messages
-  chatdata = {
-    model: LLMODEL,
-    messages: messages
-  }
-  insize = chatdata.to_s.size
-  response = $llm_client.chat(chatdata)
-  outsize = response.to_s.size
-  assistant_sentence = get_content(response)
-  if /^\(.+?として\)/ =~ assistant_sentence
-    assistant_sentence = Regexp.last_match.post_match
-  elsif /『(.+?)』/ =~ assistant_sentence
-    assistant_sentence = $1
-  end
-  return assistant_sentence, insize, outsize
+  return user_sentence, assistant_sentence, insize, outsize
 end
 
 #=== メッセージの取得
