@@ -57,7 +57,7 @@ def main()
     else
       time0 = Time::now
       dbh = get_dbh()
-      assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+      user_sentence, assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       dbh.close
       time = Time::now - time0
       printf("%s(%.1f,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, insize, outsize, assistant_name, assistant_sentence)
