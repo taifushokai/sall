@@ -7,4 +7,6 @@
 まこと は みのり の従弟で家は隣同士です。
 みのり と まこと は科学オタクでしょっちゅう科学の話題で議論しています。
 ^^^
+#ollama_url: http://terence:11434
+ollama_url: http://localhost:11434
 llmodel: llama3.2:1b

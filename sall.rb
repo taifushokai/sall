@@ -13,10 +13,11 @@ $DBG = false # text mode debug
 NATTO_LANG = "UTF-8" # EUC-JP"
 INIT_FILE  = "sall_init.txt"
 
+$OLLAMA_URL = "http://localhost:11434"
+$LLMODEL = "llama3.2:1b"
 #$LLMODEL = "gemma:2b"
 #$LLMODEL = "qwen2.5:1.5b"
 #$LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
-$LLMODEL = "llama3.2:1b"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
@@ -80,10 +81,6 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     insize = 0
     outsize = 0
   else
-    if $llm_client == nil
-      $llm_client = Ollama::new(credentials: { address: "http://localhost:11434" },
-                                    options: { server_sent_events: true })
-    end
     system_content = ""
     # 語句の問い合わせ
     inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
@@ -106,7 +103,13 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
           setting = true
         else
           if setting
-            if /^llmodel:\s+(\S+)/ =~ line
+            if    /^ollama_url:\s+(\S+)/ =~ line
+              ollama_url = $1
+              if ollama_url != $OLLAMA_URL
+                $OLLAMA_URL = ollama_url
+                $llm_client = nil
+              end
+            elsif /^llmodel:\s+(\S+)/ =~ line
               $LLMODEL = $1
             end
           else
@@ -132,6 +135,10 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       messages: messages
     }
     insize = chatdata.to_s.size
+    if $llm_client == nil
+      $llm_client = Ollama::new(credentials: { address: $OLLAMA_URL },
+                                    options: { server_sent_events: true })
+    end
     response = $llm_client.chat(chatdata)
     outsize = response.to_s.size
     assistant_sentence = get_content(response)
