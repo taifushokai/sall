@@ -60,7 +60,7 @@ def main()
       user_sentence, assistant_sentence, model, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       dbh.close
       time = Time::now - time0
-      printf("%s(%.1f,%s,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, model, insize, outsize, assistant_name, assistant_sentence)
+      printf("%s(%.1f sec,%s,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, model, insize, outsize, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
       pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
         +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
@@ -106,7 +106,7 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
           setting = true
         else
           if setting
-            if /llmodel:\s+(\S+)/ =~ line
+            if /^llmodel:\s+(\S+)/ =~ line
               $LLMODEL = $1
             end
           else

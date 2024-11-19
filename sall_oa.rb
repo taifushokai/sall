@@ -5,8 +5,8 @@
 require "openai"
 
 $DBG = false # text mode debug
-INIT_FILE  = "sall_init.txt"
-LLMODEL = "gpt-4o"
+INIT_FILE  = "sall_init_oa.txt"
+$LLMODEL = "gpt-4o"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
@@ -44,7 +44,7 @@ def main()
       time0 = Time::now
       assistant_sentence = talk(nil, assistant_name, user_name, user_sentence, pasttalk)
       time = Time::now - time0
-      printf("%s(%.1f) %s : %s\n", Time::now.strftime("%T"), time, assistant_name, assistant_sentence)
+      printf("%s(%.1f sec, %s) %s : %s\n", Time::now.strftime("%T"), time, $LLMODEL, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
       pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
         +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
@@ -67,10 +67,25 @@ def talk(dummy, assistant_name, user_name, user_sentence, pasttalk)
     system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
   end
   # プロフィールの読み込み
+  setting = false
+  buff = ""
   open(INIT_FILE) do |rh|
-    system_content += rh.read + "\n"
+    rh.each_line do |line|
+      if /^\^\^\^/ =~ line
+        setting = true
+      else
+        if setting
+          if /^llmodel:\s+(\S+)/ =~ line
+            $LLMODEL = $1
+          end
+        else
+          buff += line
+        end
+      end
+    end
   end
-  # 過去の会話の追加
+  system_content += buff + "\n"
+# 過去の会話の追加
   system_content += pasttalk.to_s
   # 現在時刻の追加
   system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
@@ -81,7 +96,7 @@ def talk(dummy, assistant_name, user_name, user_sentence, pasttalk)
   messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
   messages << {"role": ROLL_USEER, "content": user_sentence}
   chatdata = {
-    model: LLMODEL,
+    model: $LLMODEL,
     messages: messages
   }
   response = $llm_client.chat(parameters: chatdata)

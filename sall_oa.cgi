@@ -35,7 +35,7 @@ def main
     time0 = Time::now
     assistant_sentence = talk(nil, assistant_name, user_name, user_sentence, pasttalk)
     time = Time::now - time0
-    timestr = sprintf("%s (%.1f)", Time::now.strftime("%F %T"), time)
+    timestr = sprintf("%s (%.1f sec, %s)", Time::now.strftime("%F %T"), time, $LLMODEL)
   else # submit == "CLEAR"
     user_sentence = ""
     assistant_sentence = ""
