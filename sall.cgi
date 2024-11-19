@@ -34,10 +34,10 @@ def main
   if submit == "OK" && user_sentence != ""
     time0 = Time::now
     dbh = get_dbh()
-    user_sentence, assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+    user_sentence, assistant_sentence, model, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     dbh.close
     time = Time::now - time0
-    timestr = sprintf("%s (%.1f, in %d, out %d)", Time::now.strftime("%F %T"), time, insize, outsize)
+    timestr = sprintf("%s (%.1f sec, model %s, in %d, out %d)", Time::now.strftime("%F %T"), time, model, insize, outsize)
   else # submit == "CLEAR"
     user_sentence = ""
     assistant_sentence = ""

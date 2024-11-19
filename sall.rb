@@ -13,10 +13,10 @@ $DBG = false # text mode debug
 NATTO_LANG = "UTF-8" # EUC-JP"
 INIT_FILE  = "sall_init.txt"
 
-#LLMODEL = "gemma:2b"
-#LLMODEL = "qwen2.5:1.5b"
-#LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
-LLMODEL = "llama3.2:1b"
+#$LLMODEL = "gemma:2b"
+#$LLMODEL = "qwen2.5:1.5b"
+#$LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
+$LLMODEL = "llama3.2:1b"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
@@ -57,10 +57,10 @@ def main()
     else
       time0 = Time::now
       dbh = get_dbh()
-      user_sentence, assistant_sentence, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
+      user_sentence, assistant_sentence, model, insize, outsize = talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       dbh.close
       time = Time::now - time0
-      printf("%s(%.1f,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, insize, outsize, assistant_name, assistant_sentence)
+      printf("%s(%.1f,%s,%d,%d) %s : %s\n", Time::now.strftime("%T"), time, model, insize, outsize, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
       pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
         +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
@@ -98,9 +98,24 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
     end
     # プロフィールの読み込み
+    setting = false
+    buff = ""
     open(INIT_FILE) do |rh|
-      system_content += rh.read + "\n"
+      rh.each_line do |line|
+        if /^\^\^\^/ =~ line
+          setting = true
+        else
+          if setting
+            if /llmodel:\s+(\S+)/ =~ line
+              $LLMODEL = $1
+            end
+          else
+            buff += line
+          end
+        end
+      end
     end
+    system_content += buff + "\n"
     # 過去の会話の追加
     system_content += pasttalk.to_s
     # 現在時刻の追加
@@ -113,7 +128,7 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     messages << {"role": ROLL_USEER, "content": user_sentence}
     #puts messages
     chatdata = {
-      model: LLMODEL,
+      model: $LLMODEL,
       messages: messages
     }
     insize = chatdata.to_s.size
@@ -126,7 +141,7 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       assistant_sentence = $1
     end
   end
-  return user_sentence, assistant_sentence, insize, outsize
+  return user_sentence, assistant_sentence, $LLMODEL, insize, outsize
 end
 
 #=== メッセージの取得
