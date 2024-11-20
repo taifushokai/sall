@@ -15,9 +15,6 @@ INIT_FILE  = "sall_init.txt"
 
 $OLLAMA_URL = "http://localhost:11434"
 $LLMODEL = "llama3.2:1b"
-#$LLMODEL = "gemma:2b"
-#$LLMODEL = "qwen2.5:1.5b"
-#$LLMODEL = "7shi/tanuki-dpo-v1.0:latest"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
