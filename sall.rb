@@ -7,6 +7,7 @@ require "nkf"
 require "natto"
 require "duckduckgo"
 require "wikipedia"
+require "./salltexts_util.rb"
 require "./sallwords_util.rb"
 
 $DBG = false # text mode debug
@@ -29,6 +30,7 @@ $parser = nil
 
 #=== main
 def main()
+  $DBG = true
   assistant_name = ASSISTANT_DEF
   user_name = USER_DEF
   pasttalk = ""
@@ -124,7 +126,7 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     system_content.each_line do |line|
       messages << {"role": ROLL_SYSTEM, "content": line}
     end
-    messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
+    messages << {"role": ROLL_ASSISTANT, "content": "答えられる範囲で質問に答えます。"}
     messages << {"role": ROLL_USEER, "content": user_sentence}
     #puts messages
     chatdata = {
@@ -196,37 +198,44 @@ def inquiry(dbh, sentence, exclusions = [])
     nounarr << [noun, nountype]
   end
   nounarr.each do |noun, nountype|
-    # データベースで説明を求める
-    descrip = select(dbh, noun)
+    # テキストで説明を求める(比較的長文)
+    descrip = refer(noun)
     if descrip
-      inquiry_results << sprintf("%s : %s\n", noun, descrip)
-      printf("(Database/%s) %s\n", nountype, noun) if $DBG
+      inquiry_results << sprintf("%s\n", descrip)
+      printf("(Text/%s) %s\n", nountype, noun) if $DBG
     else
-      if exclusions.include?(noun) # 除外語
-        printf("(exclusion) %s\n", noun) if $DBG
-      elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞", "非自立"].member?(nountype)
-        printf("(%s) %s\n", nountype, noun) if $DBG
+      # データベースでキャッシュを取得する
+      descrip = select(dbh, noun)
+      if descrip
+        inquiry_results << sprintf("%s : %s\n", noun, descrip)
+        printf("(Database/%s) %s\n", nountype, noun) if $DBG
       else
-        # Wikipedia で説明を求める
-        result = nil
-        begin
-          unless $wkpclient
-            $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
-          end
-          result = $wkpclient.find(noun)
-        rescue
-        end
-        if result and result.summary
-          inquiry_results << sprintf("%s : %s\n", noun, result.summary.strip)
-          insert(dbh, noun, result.summary.strip, "WIKIPEDIA", level = "F")
-          printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if $DBG
+        if exclusions.include?(noun) # 除外語
+          printf("(exclusion) %s\n", noun) if $DBG
+        elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞", "非自立"].member?(nountype) # 除外名詞
+          printf("(%s) %s\n", nountype, noun) if $DBG
         else
-          # DuckDuckGo で説明を求める
-          results = DuckDuckGo::search(:query => noun)
-          if results[0]
-            inquiry_results << sprintf("%s : %s\n", noun, results[0].description.strip)
-            insert(dbh, noun, results[0].description.strip, "DUCKDUCKGO", level = "G")
-            printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if $DBG
+          # Wikipedia で説明を求める
+          result = nil
+          begin
+            unless $wkpclient
+              $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
+            end
+            result = $wkpclient.find(noun)
+          rescue
+          end
+          if result and result.summary
+            inquiry_results << sprintf("%s : %s\n", noun, result.summary.strip)
+            insert(dbh, noun, result.summary.strip, "WIKIPEDIA", level = "F")
+            printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if $DBG
+          else
+            # DuckDuckGo で説明を求める
+            results = DuckDuckGo::search(:query => noun)
+            if results[0]
+              inquiry_results << sprintf("%s : %s\n", noun, results[0].description.strip)
+              insert(dbh, noun, results[0].description.strip, "DUCKDUCKGO", level = "G")
+              printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if $DBG
+            end
           end
         end
       end
