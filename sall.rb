@@ -38,7 +38,7 @@ def main()
     if user_name == "Visitor"
       printf("%s あなた > ", Time::now.strftime("%T"))
     else
-      printf("%s %s > ", Time::now.strftime("%T"), user_name) 
+      printf("%s %s > ", Time::now.strftime("%T"), user_name)
     end
     getbuf = gets()
     if getbuf == nil
@@ -81,18 +81,7 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     outsize = 0
   else
     system_content = ""
-    # 語句の問い合わせ
-    inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
-    if inquiry_results
-      system_content += inquiry_results
-    end
-    # 名前のの設定
-    if assistant_name != ASSISTANT_DEF
-      system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
-    end
-    if user_name != USER_DEF
-      system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
-    end
+
     # プロフィールの読み込み
     setting = false
     buff = ""
@@ -120,17 +109,34 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       end
     end
     system_content += buff + "\n"
+
+    # 名前のの設定
+    if assistant_name != ASSISTANT_DEF
+      system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
+    end
+    if user_name != USER_DEF
+      system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
+    end
+
+    # 語句の問い合わせ
+    inquiry_results = inquiry(dbh, user_sentence, [assistant_name, user_name])
+    if inquiry_results
+      system_content += inquiry_results
+    end
+
     # 過去の会話の追加
     system_content += pasttalk.to_s
+
     # 現在時刻の追加
     system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
+
     messages = []
     system_content.each_line do |line|
       messages << {"role": ROLL_SYSTEM, "content": line}
     end
     messages << {"role": ROLL_ASSISTANT, "content": "答えられる範囲で質問に答えます。"}
     messages << {"role": ROLL_USEER, "content": user_sentence}
-    #puts messages
+    ##puts messages
     chatdata = {
       model: $LLMODEL,
       messages: messages
@@ -199,6 +205,7 @@ def inquiry(dbh, sentence, exclusions = [])
   if nouncont
     nounarr << [noun, nountype]
   end
+
   nounarr.each do |noun, nountype|
     # テキストで説明を求める(比較的長文)
     descrip = refer(noun)
@@ -251,3 +258,4 @@ if __FILE__ == $PROGRAM_NAME
   $DBG = true
   main()
 end
+

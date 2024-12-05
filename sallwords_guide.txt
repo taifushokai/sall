@@ -26,3 +26,13 @@ wtime    処理時間(UTC)
 ===123       変更
 ===DEL123    削除
 ===DELALL    全削除
+
+
+・テキストフォーマット(salltexts)
+^-^
+{keyword}
+===
+{descrip}
+^^^
+
+

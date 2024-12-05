@@ -16,19 +16,22 @@ $index = nil
 #=== main
 def main()
   if ARGV[0] == "INDEX"
-    index()
+    index(ARGV[1])
   else
-    printf("ex) salltexts_util.rb INDEX\n")
+    printf("ex) salltexts_util.rb INDEX [texts_dir]\n")
   end
 end
 
 #=== 初期設定
-def inittexts(test_dir)
-  $TEXTS_DIR = texts_dir
+def inittexts(texts_dir)
+  if texts_dir
+    $TEXTS_DIR = texts_dir
+  end
 end
 
 #=== インデックスの作成
-def index()
+def index(texts_dir)
+  inittexts(texts_dir)
   FileUtils::mkdir_p($TEXTS_DIR)
   $index = []
   Dir::glob("#{$TEXTS_DIR}/**/*.txt") do |path|
@@ -65,7 +68,7 @@ def refer(word)
         rh.each_line do |line|
           line.strip!
           if BEGINMARK =~ line
-            flag = true
+            rflag = true
           elsif ENDMARK =~ line
             break
           elsif rflag
