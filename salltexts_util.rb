@@ -5,9 +5,11 @@
 
 require "fileutils"
 
-TEXTS_DIR = "salltexts"
-BEGINMARK = "---"
-ENDMARK   = "^^^"
+$TEXTS_DIR = "salltexts"
+
+SALLTEXTMARK = "^-^"
+BEGINMARK = /^===/
+ENDMARK   = /^\^\^\^$/
 
 $index = nil
 
@@ -20,23 +22,31 @@ def main()
   end
 end
 
+#=== 初期設定
+def inittexts(test_dir)
+  $TEXTS_DIR = texts_dir
+end
+
 #=== インデックスの作成
 def index()
-  FileUtils::mkdir_p(TEXTS_DIR)
+  FileUtils::mkdir_p($TEXTS_DIR)
   $index = []
-  Dir::glob("#{TEXTS_DIR}/**/*.txt") do |path|
-    mode = 0 # keyword
+  Dir::glob("#{$TEXTS_DIR}/**/*.txt") do |path|
     open(path) do |rh|
+      head = rh.gets.strip
+      break if head != SALLTEXTMARK
       rh.each_line do |line|
         line.strip!
-        break if line == BEGINMARK or line == ENDMARK
-        rpath = path.sub("#{TEXTS_DIR}/", "")
-        $index << [line, rpath]
+        break if BEGINMARK =~ line or ENDMARK =~ line
+        if line != ""
+          rpath = path.sub("#{$TEXTS_DIR}/", "")
+          $index << [line, rpath]
+        end
       end
     end
   end
   $index.uniq!
-  open("#{TEXTS_DIR}/0.idx", "w") do |wh|
+  open("#{$TEXTS_DIR}/0.idx", "w") do |wh|
     $index.each do |keyword, rpath|
       wh.printf("%s\t%s\n", keyword, rpath)
     end
@@ -50,15 +60,15 @@ def refer(word)
   descrip = ""
   $index.each do |keyword, rpath|
     if word == keyword
-      open("#{TEXTS_DIR}/#{rpath}") do |rh|
+      open("#{$TEXTS_DIR}/#{rpath}") do |rh|
         rflag = false
         rh.each_line do |line|
           line.strip!
-          if line == BEGINMARK
+          if BEGINMARK =~ line
             flag = true
-          elsif line == ENDMARK
+          elsif ENDMARK =~ line
             break
-          else
+          elsif rflag
             descrip << line
           end
         end
@@ -74,7 +84,7 @@ end
 
 def readindex()
   $index = []
-  open("#{TEXTS_DIR}/0.idx") do |rh|
+  open("#{$TEXTS_DIR}/0.idx") do |rh|
     rh.each_line do |line|
       $index << line.strip.split("\t", 2)
     end

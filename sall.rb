@@ -110,6 +110,8 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
               end
             elsif /^llmodel:\s+(\S+)/ =~ line
               $LLMODEL = $1
+            elsif /^texts_dir:\s+(\S+)/ =~ line
+              inittexts($1)
             end
           else
             buff += line
