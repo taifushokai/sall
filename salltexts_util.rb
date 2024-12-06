@@ -62,7 +62,7 @@ def refer(word)
   end
   descrip = ""
   $index.each do |keyword, rpath|
-    if word == keyword
+    if word.casecmp(keyword).zero?
       open("#{$TEXTS_DIR}/#{rpath}") do |rh|
         rflag = false
         rh.each_line do |line|
