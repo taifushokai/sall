@@ -44,6 +44,8 @@ def main()
     if getbuf == nil
       printf("\n")
       break
+    elsif /^===/ =~ getbuf or /^@text/ =~ getbuf
+      getbuf << STDIN.read.to_s.strip
     end
     user_sentence = getbuf.strip
     cliches = user_sentence[0..80].downcase.strip
@@ -71,12 +73,50 @@ end
 
 #=== 会話
 def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
-  if /^===(\S+)/ =~ user_sentence
-    word = $1
-    descrip = Regexp.last_match.post_match.strip
-    insert(dbh, word, descrip)
-    user_sentence = sprintf("「%s」とは", word)
+  if /^===/ =~ user_sentence
+    rest = Regexp.last_match.post_match
+    (words, descrip) = rest.split(/\n/, 2)
+    words.to_s.split("|").each do |word|
+      insert(dbh, word.strip, descrip)
+    end
+    user_sentence = sprintf("「%s」とは", words)
     assistant_sentence = descrip
+    insize = 0
+    outsize = 0
+  elsif /^@list/i =~ user_sentence
+    user_sentence = ""
+    assistant_sentence = "\n" + list(dbh)
+    insize = 0
+    outsize = 0
+  elsif /^@del\s+(\d+)/i =~ user_sentence
+    pid = $1.to_i
+    delete(dbh, pid)
+    user_sentence = ""
+    assistant_sentence = ""
+    insize = 0
+    outsize = 0
+  elsif /^@delall/i =~ user_sentence
+    clear(dbh)
+    user_sentence = ""
+    assistant_sentence = ""
+    insize = 0
+    outsize = 0
+  elsif /^@listtext/i =~ user_sentence
+    user_sentence = ""
+    assistant_sentence = "\n" + listtext()
+    insize = 0
+    outsize = 0
+  elsif /^@text/i =~ user_sentence
+    if /===/ =~ user_sentence
+      rest = Regexp.last_match.post_match
+      (words, descrip) = rest.split(/\n/, 2)
+      insert_text(words, descrip)
+      user_sentence = sprintf("「%s」とは", words)
+      assistant_sentence = descrip
+    else
+      user_sentence = ""
+      assistant_sentence = ""
+    end
     insize = 0
     outsize = 0
   else

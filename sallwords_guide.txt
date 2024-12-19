@@ -35,4 +35,35 @@ wtime    処理時間(UTC)
 {descrip}
 ^^^
 
+・DB DUMP ォーマット
+==={keyword}[|{keyword}...]
+{descrip}
+^^^ {id} {level} {source} {wtime}
+
+DEFAULT
+level    C
+source   MANUAL
+wtime    処理時間(UTC)
+
+
+・テキストフォーマット(salltexts)
+^-^
+==={keyword}[|{keyword}...]
+{descrip}
+^^^
+{commets}
+
+@list
+@del 123
+@delall
+@listtext
+@text
+==={keyword}[|{keyword}...]
+
+優先順位
+  専門知識
+  キャッシュ
+  WikiPedia
+  DuckDuckGo
+
 

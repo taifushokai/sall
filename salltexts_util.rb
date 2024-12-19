@@ -40,7 +40,8 @@ def index(texts_dir)
       break if head != SALLTEXTMARK
       rh.each_line do |line|
         line.strip!
-        break if BEGINMARK =~ line or ENDMARK =~ line
+        if BEGINMARK =~ line
+           
         if line != ""
           rpath = path.sub("#{$TEXTS_DIR}/", "")
           $index << [line, rpath]
@@ -55,6 +56,16 @@ def index(texts_dir)
     end
   end
 end
+
+def insert_text(words, descrip)
+  wordsarr = []
+  words.to_s.split("|").each do |word|
+    wardsarr << word.strip
+  end
+#SALLTEXTMARK = "^-^"
+#BEGINMARK = /^===/
+#ENDMARK   = /^\^\^\^$/
+#end
 
 def refer(word)
   if $index == nil
