@@ -4,6 +4,7 @@ small assistant by local llm
 ## sall.cgi
 
 ## sall.rb
+  ex) sall.rb
 
 ## sallwords_util.rb
   ex) sallwords_util.rb DUMP > dump.txt

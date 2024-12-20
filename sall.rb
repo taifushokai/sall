@@ -44,7 +44,7 @@ def main()
     if getbuf == nil
       printf("\n")
       break
-    elsif /^===/ =~ getbuf or /^@text/ =~ getbuf
+    elsif /\A===/ =~ getbuf or /\A@text/ =~ getbuf
       getbuf << STDIN.read.to_s.strip
     end
     user_sentence = getbuf.strip
@@ -73,7 +73,9 @@ end
 
 #=== 会話
 def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
-  if /^===/ =~ user_sentence
+  system_content = read_init()
+  user_sentence.strip!
+  if /\A===/ =~ user_sentence
     rest = Regexp.last_match.post_match
     (words, descrip) = rest.split(/\n/, 2)
     words.to_s.split("|").each do |word|
@@ -83,30 +85,30 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     assistant_sentence = descrip
     insize = 0
     outsize = 0
-  elsif /^@list/i =~ user_sentence
+  elsif /\A@list$/i =~ user_sentence
     user_sentence = ""
     assistant_sentence = "\n" + list(dbh)
     insize = 0
     outsize = 0
-  elsif /^@del\s+(\d+)/i =~ user_sentence
+  elsif /\A@del\s+(\d+)/i =~ user_sentence
     pid = $1.to_i
     delete(dbh, pid)
     user_sentence = ""
     assistant_sentence = ""
     insize = 0
     outsize = 0
-  elsif /^@delall/i =~ user_sentence
+  elsif /\A@delall$/i =~ user_sentence
     clear(dbh)
     user_sentence = ""
     assistant_sentence = ""
     insize = 0
     outsize = 0
-  elsif /^@listtext/i =~ user_sentence
+  elsif /\A@listtext$/i =~ user_sentence
     user_sentence = ""
-    assistant_sentence = "\n" + listtext()
+    assistant_sentence = "\n" + list_texts()
     insize = 0
     outsize = 0
-  elsif /^@text/i =~ user_sentence
+  elsif /\A@text$/i =~ user_sentence
     if /===/ =~ user_sentence
       rest = Regexp.last_match.post_match
       (words, descrip) = rest.split(/\n/, 2)
@@ -120,36 +122,6 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     insize = 0
     outsize = 0
   else
-    system_content = ""
-
-    # プロフィールの読み込み
-    setting = false
-    buff = ""
-    open(INIT_FILE) do |rh|
-      rh.each_line do |line|
-        if /^\^\^\^/ =~ line
-          setting = true
-        else
-          if setting
-            if    /^ollama_url:\s+(\S+)/ =~ line
-              ollama_url = $1
-              if ollama_url != $OLLAMA_URL
-                $OLLAMA_URL = ollama_url
-                $llm_client = nil
-              end
-            elsif /^llmodel:\s+(\S+)/ =~ line
-              $LLMODEL = $1
-            elsif /^texts_dir:\s+(\S+)/ =~ line
-              inittexts($1)
-            end
-          else
-            buff += line
-          end
-        end
-      end
-    end
-    system_content += buff + "\n"
-
     # 名前のの設定
     if assistant_name != ASSISTANT_DEF
       system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
@@ -196,6 +168,36 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     end
   end
   return user_sentence, assistant_sentence, $LLMODEL, insize, outsize
+end
+
+#=== 設定ファイル読み込み
+def read_init()
+  system_content = ""
+  setting = false
+  open(INIT_FILE) do |rh|
+    rh.each_line do |line|
+      if /^\^\^\^/ =~ line
+        setting = true
+      else
+        if setting
+          if    /^ollama_url:\s+(\S+)/ =~ line
+            ollama_url = $1
+            if ollama_url != $OLLAMA_URL
+              $OLLAMA_URL = ollama_url
+              $llm_client = nil
+            end
+          elsif /^llmodel:\s+(\S+)/ =~ line
+            $LLMODEL = $1
+          elsif /^texts_dir:\s+(\S+)/ =~ line
+            init_texts($1)
+          end
+        else
+          system_content += line
+        end
+      end
+    end
+  end
+  return system_content
 end
 
 #=== メッセージの取得
@@ -248,7 +250,7 @@ def inquiry(dbh, sentence, exclusions = [])
 
   nounarr.each do |noun, nountype|
     # テキストで説明を求める(比較的長文)
-    descrip = refer(noun)
+    descrip = refer_text(noun)
     if descrip
       inquiry_results << sprintf("%s\n", descrip)
       printf("(Text/%s) %s\n", nountype, noun) if $DBG

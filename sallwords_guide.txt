@@ -9,41 +9,16 @@ CREATE TABLE sallwords (
 );
 
 
-・テキストフォーマット
-==={id} {level} {source} {wtime}
-{word}
-{descrip}
-^^^
-
 DEFAULT
 level    C
 source   MANUAL
 wtime    処理時間(UTC)
 
-
-・コマンド
-===ADD       追加
-===123       変更
-===DEL123    削除
-===DELALL    全削除
-
-
-・テキストフォーマット(salltexts)
-^-^
-{keyword}
-===
-{descrip}
-^^^
 
 ・DB DUMP ォーマット
 ==={keyword}[|{keyword}...]
 {descrip}
 ^^^ {id} {level} {source} {wtime}
-
-DEFAULT
-level    C
-source   MANUAL
-wtime    処理時間(UTC)
 
 
 ・テキストフォーマット(salltexts)
@@ -53,17 +28,36 @@ wtime    処理時間(UTC)
 ^^^
 {commets}
 
-@list
-@del 123
-@delall
-@listtext
-@text
-==={keyword}[|{keyword}...]
 
-優先順位
+・テキストフォーマット(salltexts)
+語検索の優先順位
   専門知識
-  キャッシュ
+  キャッシュ(SQlite)
   WikiPedia
   DuckDuckGo
+
+
+・コマンド
+  キャッシュ登録
+    ==={keyword}[|{keyword}...]
+    {descrip}
+
+  キャッシュリスト
+    @list
+
+  キャッシュ削除
+    @del {id}
+
+  キャッシュ全削除
+    @delall
+
+  テキストのリスト
+    @listtext
+
+  テキスト登録
+    @text
+    ==={keyword}[|{keyword}...]
+    {descrip}
+
 
 

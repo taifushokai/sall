@@ -8,43 +8,38 @@ require "fileutils"
 $TEXTS_DIR = "salltexts"
 
 SALLTEXTMARK = "^-^"
-BEGINMARK = /^===/
-ENDMARK   = /^\^\^\^$/
+BEGINMARK = "==="
+ENDMARK   = "^^^"
 
 $index = nil
 
 #=== main
 def main()
   if ARGV[0] == "INDEX"
-    index(ARGV[1])
+    index_texts(ARGV[1])
   else
     printf("ex) salltexts_util.rb INDEX [texts_dir]\n")
   end
 end
 
-#=== 初期設定
-def inittexts(texts_dir)
-  if texts_dir
-    $TEXTS_DIR = texts_dir
-  end
-end
-
 #=== インデックスの作成
-def index(texts_dir)
-  inittexts(texts_dir)
+def index_texts(texts_dir = nil)
+  init_texts(texts_dir)
   FileUtils::mkdir_p($TEXTS_DIR)
   $index = []
   Dir::glob("#{$TEXTS_DIR}/**/*.txt") do |path|
     open(path) do |rh|
       head = rh.gets.strip
       break if head != SALLTEXTMARK
+      rpath = path.sub("#{$TEXTS_DIR}/", "")
       rh.each_line do |line|
         line.strip!
-        if BEGINMARK =~ line
-           
-        if line != ""
-          rpath = path.sub("#{$TEXTS_DIR}/", "")
-          $index << [line, rpath]
+        if /\A#{Regexp::quote(BEGINMARK)}/ =~ line
+          Regexp.last_match.post_match.to_s.split("|").each do |keyword|
+            keyword.strip!
+            $index << [keyword, rpath]
+          end
+          break
         end
       end
     end
@@ -57,19 +52,41 @@ def index(texts_dir)
   end
 end
 
+#=== 初期設定
+def init_texts(texts_dir)
+  if texts_dir
+    $TEXTS_DIR = texts_dir
+  end
+end
+
 def insert_text(words, descrip)
   wordsarr = []
   words.to_s.split("|").each do |word|
-    wardsarr << word.strip
+    wordsarr << word.strip
   end
-#SALLTEXTMARK = "^-^"
-#BEGINMARK = /^===/
-#ENDMARK   = /^\^\^\^$/
-#end
+  filename = sprintf("%s_%03d.txt", Time::now.strftime("%Y%m%d_%H%M%S"), rand(1000))
+  open("#{$TEXTS_DIR}/#{filename}", "w") do |rh|
+    rh.printf("%s\n",   SALLTEXTMARK)
+    rh.printf("%s%s\n", BEGINMARK, wordsarr.join("|"))
+    rh.printf("%s\n",   descrip)
+    rh.printf("%s\n",   ENDMARK)
+  end
+  index_texts()
+end
 
-def refer(word)
+def list_texts()
+  list = []
+  open("#{$TEXTS_DIR}/0.idx") do |rh|
+    rh.each_line do |line|
+      list << line.strip.split("\t", 2)[0]
+    end
+  end
+  return list.sort.join("\n")
+end
+
+def refer_text(word)
   if $index == nil
-    readindex()
+    read_textindex()
   end
   descrip = ""
   $index.each do |keyword, rpath|
@@ -78,9 +95,9 @@ def refer(word)
         rflag = false
         rh.each_line do |line|
           line.strip!
-          if BEGINMARK =~ line
+          if    /\A#{Regexp::quote(BEGINMARK)}/ =~ line
             rflag = true
-          elsif ENDMARK =~ line
+          elsif /\A#{Regexp::quote(ENDMARK)}/ =~ line
             break
           elsif rflag
             descrip << line
@@ -96,7 +113,7 @@ def refer(word)
   return descrip
 end
 
-def readindex()
+def read_textindex()
   $index = []
   open("#{$TEXTS_DIR}/0.idx") do |rh|
     rh.each_line do |line|
@@ -105,7 +122,7 @@ def readindex()
   end
 end
 
-#= 直接呼ばれた場合は会話(CLI)を始める
+#= 直接呼ばれた場合はコマンド
 if __FILE__ == $PROGRAM_NAME
   $DBG = true
   main()
