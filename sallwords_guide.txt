@@ -37,27 +37,3 @@ wtime    処理時間(UTC)
   DuckDuckGo
 
 
-・コマンド
-  キャッシュ登録
-    ==={keyword}[|{keyword}...]
-    {descrip}
-
-  キャッシュリスト
-    @list
-
-  キャッシュ削除
-    @del {id}
-
-  キャッシュ全削除
-    @delall
-
-  テキストのリスト
-    @listtext
-
-  テキスト登録
-    @text
-    ==={keyword}[|{keyword}...]
-    {descrip}
-
-
-
