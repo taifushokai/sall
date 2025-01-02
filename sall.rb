@@ -218,6 +218,8 @@ end
 #=== 語の説明を求める
 def inquiry(dbh, sentence, exclusions = [])
   inquiry_results = ""
+
+  # 名詞の抽出
   unless $parser
     $parser = Natto::MeCab.new
   end
@@ -237,6 +239,14 @@ def inquiry(dbh, sentence, exclusions = [])
         nountype = $2
       end
       nouncont = true
+    elsif /^(.+?)\t接頭詞,(名詞接続),/ =~ line
+      noun << $1
+      if nouncont
+        nountype = "熟語"
+      else
+        nountype = $2
+      end
+      nouncont = true
     else
       nounarr << [noun, nountype]
       noun = ""
@@ -248,6 +258,7 @@ def inquiry(dbh, sentence, exclusions = [])
     nounarr << [noun, nountype]
   end
 
+  # 名詞の説明を取得する
   nounarr.each do |noun, nountype|
     # テキストで説明を求める(比較的長文)
     descrip = refer_text(noun)
