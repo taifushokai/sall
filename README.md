@@ -17,7 +17,7 @@ small assistant by local llm
     gem install natto
     gem install wikipedia-client
     gem install duckduckgo
-    gem install sqlite3
+    gem install sqlite3 -v '2.4.0'
 
     gem install ruby-openai(Example of using OpenAI's API)
 
