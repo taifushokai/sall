@@ -1,0 +1,9 @@
+= MANUAL (Japanase)
+
+**TBS**
+
+これから書くつもり
+
+1.とりあえずクローン
+ git clone git@github.com:taifushokai/sall.git
+

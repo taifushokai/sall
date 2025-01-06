@@ -1,5 +1,6 @@
 # sall
 small assistant by local llm
+(Processing target is Japanese)
 
 ## System Requirements
   OS is assumed to be AlmaLinux8
