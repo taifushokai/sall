@@ -17,17 +17,20 @@ def main
   user_sentence_new  = cgi["user_sentence_new"]
   nowstr = Time::now.strftime("%F %T")
   if user_sentence != "" or assistant_sentence != ""
-    user_name = "Visiter" if user_name == ""
+    user_name = "Visitor" if user_name == ""
     assistant_name = "Assistant" if assistant_name == ""
-    pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
-      +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
-      nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
+    pasttalk = sprintf(
+      "時刻 %s のユーザの「%s」としての発言: %s\n" +
+      "時刻 %s のassistantの「%s」としての発言: %s\n",
+      nowstr, user_name, user_sentence,
+      nowstr, assistant_name, assistant_sentence
+    )
   else
     pasttalk = ""
   end
   timestr = ""
   user_name = user_name_new
-  user_name = "Visiter" if user_name == ""
+  user_name = "Visitor" if user_name == ""
   assistant_name = assistant_name_new
   assistant_name = "Assistant" if assistant_name == ""
   user_sentence = user_sentence_new
@@ -114,7 +117,7 @@ Content-type: text/html
       <input type="submit" name="submit" value="OK" />
       &nbsp; &nbsp;
       <input type="submit" name="submit" value="CLEAR" />
-      </dev>
+      </div>
     </form>
     <br />
   </body>
