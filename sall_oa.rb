@@ -46,9 +46,12 @@ def main()
       time = Time::now - time0
       printf("%s(%.1f sec, %s) %s : %s\n", Time::now.strftime("%T"), time, $LLMODEL, assistant_name, assistant_sentence)
       nowstr = Time::now.strftime("%F %T")
-      pasttalk = sprintf("時刻 %s のユーザの「%s」としての発言: %s\n" \
-        +             "時刻 %s のassistantの「%s」としての発言: %s\n", \
-        nowstr, nowstr, user_name, user_sentence, assistant_name, assistant_sentence)
+      pasttalk = sprintf(
+        "時刻 %s のユーザの「%s」としての発言: %s\n" +
+        "時刻 %s のassistantの「%s」としての発言: %s\n",
+        nowstr, user_name, user_sentence,
+        nowstr, assistant_name, assistant_sentence
+      )
     end
   end
 end
