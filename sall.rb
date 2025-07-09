@@ -10,19 +10,30 @@ require "wikipedia"
 require "./salltexts_util.rb"
 require "./sallwords_util.rb"
 
-$DBG = false # text mode debug
-NATTO_LANG = "UTF-8" # EUC-JP"
-INIT_FILE  = "sall_init.txt"
+class SallConfig
+  attr_accessor :debug, :natto_lang, :init_file, :ollama_url, :llmodel
+  
+  def initialize
+    @debug = false
+    @natto_lang = "UTF-8"
+    @init_file = "sall_init.txt"
+    @ollama_url = "http://localhost:11434"
+    @llmodel = "llama3.2:1b"
+  end
+end
 
-$OLLAMA_URL = "http://localhost:11434"
-$LLMODEL = "llama3.2:1b"
+$config = SallConfig.new
 
-ROLL_SYSTEM = "system"
-ROLL_ASSISTANT = "assistant"
-ROLL_USEER = "user"
+module Roles
+  SYSTEM = "system"
+  ASSISTANT = "assistant"
+  USER = "user"
+end
 
-ASSISTANT_DEF = "Assistant"
-USER_DEF = "Visitor"
+module DefaultNames
+  ASSISTANT = "Assistant"
+  USER = "Visitor"
+end
 
 
 $llm_client = nil
@@ -30,9 +41,9 @@ $parser = nil
 
 #=== main
 def main()
-  $DBG = true
-  assistant_name = ASSISTANT_DEF
-  user_name = USER_DEF
+  $config.debug = true
+  assistant_name = DefaultNames::ASSISTANT
+  user_name = DefaultNames::USER
   pasttalk = ""
   loop do
     if user_name == "Visitor"
@@ -126,11 +137,11 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
     outsize = 0
   else
     # 名前のの設定
-    if assistant_name != ASSISTANT_DEF
-      system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
+    if assistant_name != DefaultNames::ASSISTANT
+      system_content += "#{Roles::ASSISTANT} は #{assistant_name} の役です。\n"
     end
-    if user_name != USER_DEF
-      system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
+    if user_name != DefaultNames::USER
+      system_content += "#{Roles::USER} の名前は #{user_name} です。\n"
     end
 
     # 語句の問い合わせ
@@ -147,18 +158,18 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
 
     messages = []
     system_content.each_line do |line|
-      messages << {"role": ROLL_SYSTEM, "content": line}
+      messages << {"role": Roles::SYSTEM, "content": line}
     end
-    messages << {"role": ROLL_ASSISTANT, "content": "答えられる範囲で質問に答えます。"}
-    messages << {"role": ROLL_USEER, "content": user_sentence}
+    messages << {"role": Roles::ASSISTANT, "content": "答えられる範囲で質問に答えます。"}
+    messages << {"role": Roles::USER, "content": user_sentence}
     ##puts messages
     chatdata = {
-      model: $LLMODEL,
+      model: $config.llmodel,
       messages: messages
     }
     insize = chatdata.to_s.size
     if $llm_client == nil
-      $llm_client = Ollama::new(credentials: { address: $OLLAMA_URL },
+      $llm_client = Ollama::new(credentials: { address: $config.ollama_url },
                                     options: { server_sent_events: true })
     end
     response = $llm_client.chat(chatdata)
@@ -170,35 +181,39 @@ def talk(dbh, assistant_name, user_name, user_sentence, pasttalk)
       assistant_sentence = $1
     end
   end
-  return user_sentence, assistant_sentence, $LLMODEL, insize, outsize
+  return user_sentence, assistant_sentence, $config.llmodel, insize, outsize
 end
 
 #=== 設定ファイル読み込み
 def read_init()
   system_content = ""
   setting = false
-  open(INIT_FILE) do |rh|
-    rh.each_line do |line|
-      if /^\^\^\^/ =~ line
-        setting = true
-      else
-        if setting
-          if    /^ollama_url:\s+(\S+)/ =~ line
-            ollama_url = $1
-            if ollama_url != $OLLAMA_URL
-              $OLLAMA_URL = ollama_url
-              $llm_client = nil
-            end
-          elsif /^llmodel:\s+(\S+)/ =~ line
-            $LLMODEL = $1
-          elsif /^texts_dir:\s+(\S+)/ =~ line
-            init_texts($1)
-          end
+  begin
+    open($config.init_file) do |rh|
+      rh.each_line do |line|
+        if /^\^\^\^/ =~ line
+          setting = true
         else
-          system_content += line
+          if setting
+            if    /^ollama_url:\s+(\S+)/ =~ line
+              ollama_url = $1
+              if ollama_url != $config.ollama_url
+                $config.ollama_url = ollama_url
+                $llm_client = nil
+              end
+            elsif /^llmodel:\s+(\S+)/ =~ line
+              $config.llmodel = $1
+            elsif /^texts_dir:\s+(\S+)/ =~ line
+              init_texts($1)
+            end
+          else
+            system_content += line
+          end
         end
       end
     end
+  rescue => e
+    printf("Init file read error: %s\n", e.message) if $config.debug
   end
   return system_content
 end
@@ -208,7 +223,7 @@ def get_content(response)
   content = ""
   response.each do |hash|
     message = hash["message"]
-    if message and message["role"] == ROLL_ASSISTANT
+    if message and message["role"] == Roles::ASSISTANT
       content += message["content"].to_s
     end
   end
@@ -226,14 +241,14 @@ def inquiry(dbh, sentence, exclusions = [])
   unless $parser
     $parser = Natto::MeCab.new
   end
-  sentence = NKF::nkf("-e", sentence) if NATTO_LANG != "UTF-8"
+  sentence = NKF::nkf("-e", sentence) if $config.natto_lang != "UTF-8"
   nounarr = []
   noun = ""
   nountype = ""
   nouncont = false
   parsedtext = $parser.parse(sentence)
   parsedtext.each_line do |line|
-    line = NKF::nkf("-w", line).scrub if NATTO_LANG != "UTF-8"
+    line = NKF::nkf("-w", line).scrub if $config.natto_lang != "UTF-8"
     if /^(.+?)\t名詞,(.+?),/ =~ line
       noun << $1
       if nouncont
@@ -267,18 +282,18 @@ def inquiry(dbh, sentence, exclusions = [])
     descrip = refer_text(noun)
     if descrip
       inquiry_results << sprintf("%s\n", descrip)
-      printf("(Text/%s) %s\n", nountype, noun) if $DBG
+      printf("(Text/%s) %s\n", nountype, noun) if $config.debug
     else
       # データベースでキャッシュを取得する
       descrip = select(dbh, noun)
       if descrip
         inquiry_results << sprintf("%s : %s\n", noun, descrip)
-        printf("(Database/%s) %s\n", nountype, noun) if $DBG
+        printf("(Database/%s) %s\n", nountype, noun) if $config.debug
       else
         if exclusions.include?(noun) # 除外語
-          printf("(exclusion) %s\n", noun) if $DBG
+          printf("(exclusion) %s\n", noun) if $config.debug
         elsif ["一般", "代名詞", "サ変接続", "副詞可能", "時相名詞", "数詞", "非自立"].member?(nountype) # 除外名詞
-          printf("(%s) %s\n", nountype, noun) if $DBG
+          printf("(%s) %s\n", nountype, noun) if $config.debug
         else
           # Wikipedia で説明を求める
           result = nil
@@ -287,19 +302,24 @@ def inquiry(dbh, sentence, exclusions = [])
               $wkpclient = Wikipedia::Client::new(Wikipedia::Configuration.new(domain: 'ja.wikipedia.org'))
             end
             result = $wkpclient.find(noun)
-          rescue
+          rescue => e
+            printf("Wikipedia lookup error: %s\n", e.message) if $config.debug
           end
           if result and result.summary
             inquiry_results << sprintf("%s : %s\n", noun, result.summary.strip)
             insert(dbh, noun, result.summary.strip, "WIKIPEDIA", level = "F")
-            printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if $DBG
+            printf("(Wikipedia/%s) %s\n", nountype, result.title.strip) if $config.debug
           else
             # DuckDuckGo で説明を求める
-            results = DuckDuckGo::search(:query => noun)
-            if results[0]
-              inquiry_results << sprintf("%s : %s\n", noun, results[0].description.strip)
-              insert(dbh, noun, results[0].description.strip, "DUCKDUCKGO", level = "G")
-              printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if $DBG
+            begin
+              results = DuckDuckGo::search(:query => noun)
+              if results[0]
+                inquiry_results << sprintf("%s : %s\n", noun, results[0].description.strip)
+                insert(dbh, noun, results[0].description.strip, "DUCKDUCKGO", level = "G")
+                printf("(DuckDuckGo/%s) %s\n", nountype, results[0].title.strip) if $config.debug
+              end
+            rescue => e
+              printf("DuckDuckGo search error: %s\n", e.message) if $config.debug
             end
           end
         end
@@ -311,7 +331,7 @@ end
 
 #= 直接呼ばれた場合は会話(CLI)を始める
 if __FILE__ == $PROGRAM_NAME
-  $DBG = true
+  $config.debug = true
   main()
 end
 
