@@ -5,11 +5,14 @@
 
 require "fileutils"
 
-$TEXTS_DIR = "salltexts"
+module SallTextsConfig
+  TEXTS_DIR = "salltexts"
+  SALLTEXT_MARK = "^-^"
+  BEGIN_MARK = "==="
+  END_MARK = "^^^"
+end
 
-SALLTEXTMARK = "^-^"
-BEGINMARK = "==="
-ENDMARK   = "^^^"
+$TEXTS_DIR = SallTextsConfig::TEXTS_DIR
 
 $index = nil
 
@@ -28,20 +31,24 @@ def index_texts(texts_dir = nil)
   FileUtils::mkdir_p($TEXTS_DIR)
   $index = []
   Dir::glob("#{$TEXTS_DIR}/**/*.txt") do |path|
-    open(path) do |rh|
-      head = rh.gets.strip
-      break if head != SALLTEXTMARK
-      rpath = path.sub("#{$TEXTS_DIR}/", "")
-      rh.each_line do |line|
-        line.strip!
-        if /\A#{Regexp::quote(BEGINMARK)}/ =~ line
-          Regexp.last_match.post_match.to_s.split("|").each do |keyword|
-            keyword.strip!
-            $index << [keyword, rpath]
+    begin
+      open(path) do |rh|
+        head = rh.gets.strip
+        break if head != SallTextsConfig::SALLTEXT_MARK
+        rpath = path.sub("#{$TEXTS_DIR}/", "")
+        rh.each_line do |line|
+          line.strip!
+          if /\A#{Regexp::quote(SallTextsConfig::BEGIN_MARK)}/ =~ line
+            Regexp.last_match.post_match.to_s.split("|").each do |keyword|
+              keyword.strip!
+              $index << [keyword, rpath]
+            end
+            break
           end
-          break
         end
       end
+    rescue => e
+      puts "Error reading file #{path}: #{e.message}"
     end
   end
   $index.uniq!
@@ -66,10 +73,10 @@ def insert_text(words, descrip)
   end
   filename = sprintf("%s_%03d.txt", Time::now.strftime("%Y%m%d_%H%M%S"), rand(1000))
   open("#{$TEXTS_DIR}/#{filename}", "w") do |rh|
-    rh.printf("%s\n",   SALLTEXTMARK)
-    rh.printf("%s%s\n", BEGINMARK, wordsarr.join("|"))
+    rh.printf("%s\n",   SallTextsConfig::SALLTEXT_MARK)
+    rh.printf("%s%s\n", SallTextsConfig::BEGIN_MARK, wordsarr.join("|"))
     rh.printf("%s\n",   descrip)
-    rh.printf("%s\n",   ENDMARK)
+    rh.printf("%s\n",   SallTextsConfig::END_MARK)
   end
   index_texts()
 end
@@ -95,9 +102,9 @@ def refer_text(word)
         rflag = false
         rh.each_line do |line|
           line.strip!
-          if    /\A#{Regexp::quote(BEGINMARK)}/ =~ line
+          if    /\A#{Regexp::quote(SallTextsConfig::BEGIN_MARK)}/ =~ line
             rflag = true
-          elsif /\A#{Regexp::quote(ENDMARK)}/ =~ line
+          elsif /\A#{Regexp::quote(SallTextsConfig::END_MARK)}/ =~ line
             break
           elsif rflag
             descrip << line

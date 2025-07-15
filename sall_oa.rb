@@ -8,17 +8,21 @@ $DBG = false # text mode debug
 INIT_FILE  = "sall_init_oa.txt"
 $LLMODEL = "gpt-4o"
 
-ROLL_SYSTEM = "system"
-ROLL_ASSISTANT = "assistant"
-ROLL_USEER = "user"
+module Roles
+  SYSTEM = "system"
+  ASSISTANT = "assistant"
+  USER = "user"
+end
 
-ASSISTANT_DEF = "Assistant"
-USER_DEF = "Visitor"
+module DefaultNames
+  ASSISTANT = "Assistant"
+  USER = "Visitor"
+end
 
 #=== main
 def main()
-  assistant_name = ASSISTANT_DEF
-  user_name = USER_DEF
+  assistant_name = DefaultNames::ASSISTANT
+  user_name = DefaultNames::USER
   pasttalk = ""
   loop do
     if user_name == "Visitor"
@@ -63,29 +67,33 @@ def talk(dummy, assistant_name, user_name, user_sentence, pasttalk)
   end
   system_content = ""
   # 名前のの設定
-  if assistant_name != ASSISTANT_DEF
-    system_content += "#{ROLL_ASSISTANT} は #{assistant_name} の役です。\n"
+  if assistant_name != DefaultNames::ASSISTANT
+    system_content += "#{Roles::ASSISTANT} は #{assistant_name} の役です。\n"
   end
-  if user_name != USER_DEF
-    system_content += "#{ROLL_USEER} の名前は #{user_name} です。\n"
+  if user_name != DefaultNames::USER
+    system_content += "#{Roles::USER} の名前は #{user_name} です。\n"
   end
   # プロフィールの読み込み
   setting = false
   buff = ""
-  open(INIT_FILE) do |rh|
-    rh.each_line do |line|
-      if /^\^\^\^/ =~ line
-        setting = true
-      else
-        if setting
-          if /^llmodel:\s+(\S+)/ =~ line
-            $LLMODEL = $1
-          end
+  begin
+    open(INIT_FILE) do |rh|
+      rh.each_line do |line|
+        if /^\^\^\^/ =~ line
+          setting = true
         else
-          buff += line
+          if setting
+            if /^llmodel:\s+(\S+)/ =~ line
+              $LLMODEL = $1
+            end
+          else
+            buff += line
+          end
         end
       end
     end
+  rescue => e
+    puts "Init file read error: #{e.message}"
   end
   system_content += buff + "\n"
 # 過去の会話の追加
@@ -94,10 +102,10 @@ def talk(dummy, assistant_name, user_name, user_sentence, pasttalk)
   system_content += sprintf("現在の時刻は %s\n", Time::now.strftime("%F %T"))
   messages = []
   system_content.each_line do |line|
-    messages << {"role": ROLL_SYSTEM, "content": line}
+    messages << {"role": Roles::SYSTEM, "content": line}
   end
-  messages << {"role": ROLL_ASSISTANT, "content": "質問に簡潔に答えます。"}
-  messages << {"role": ROLL_USEER, "content": user_sentence}
+  messages << {"role": Roles::ASSISTANT, "content": "質問に簡潔に答えます。"}
+  messages << {"role": Roles::USER, "content": user_sentence}
   chatdata = {
     model: $LLMODEL,
     messages: messages
