@@ -16,6 +16,7 @@ INIT_FILE  = "sall_init.txt"
 
 $OLLAMA_URL = "http://localhost:11434"
 $LLMODEL = "llama3.2:1b"
+#$LLMODEL = "qwen3:0.6b"
 
 ROLL_SYSTEM = "system"
 ROLL_ASSISTANT = "assistant"
